@@ -84,8 +84,10 @@ frontend (Vite :5173)          backend (Express :3001)         Google Cloud
       │  GET /api/iam/users           │  cloudresourcemanager.v1
       │ ─────────────────────────────▶│  projects.getIamPolicy
       │                               │ ──────────────────────▶ IAM Policy
-      │  POST /api/iam/users          │  projects.setIamPolicy
-      │ ─────────────────────────────▶│ ──────────────────────▶ IAM Policy
+      │  POST /api/iam/users          │  projects.getIamPolicy +
+      │ ─────────────────────────────▶│  projects.setIamPolicy
+      │  DELETE /api/iam/users/:email │ ──────────────────────▶ IAM Policy
+      │ ─────────────────────────────▶│
       │                               │
       │  GET /api/gemini/users        │  discoveryengine.googleapis.com
       │ ─────────────────────────────▶│  /userStores/default_user_store
@@ -94,6 +96,9 @@ frontend (Vite :5173)          backend (Express :3001)         Google Cloud
       │      license-configs          │  /licenseConfigs             ──▶ Gemini Ent.
       │ ─────────────────────────────▶│
       │  POST /api/gemini/users       │  :batchUpdateUserLicenses    ──▶ Gemini Ent.
+      │ ─────────────────────────────▶│
+      │  DELETE /api/gemini/          │
+      │      users/:email             │  :batchUpdateUserLicenses    ──▶ Gemini Ent.
       │ ─────────────────────────────▶│
 ```
 
