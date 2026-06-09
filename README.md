@@ -78,7 +78,7 @@ Ambas as telas fazem polling a cada **30 segundos** e têm botão de refresh man
 
 ## Arquitetura
 
-![Diagrama de Arquitetura](docs/arquitetura.png)
+![Diagrama de Arquitetura](docs/arquitetura.svg)
 
 O frontend nunca fala diretamente com o GCP — o backend autentica com a service account e atua como proxy seguro.
 
