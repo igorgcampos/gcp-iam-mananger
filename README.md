@@ -19,7 +19,7 @@ cp backend/.env.example backend/.env
 npm run dev
 ```
 
-Abra `http://localhost:5173`.
+Abra `http://localhost:5173` no navegador.
 
 ---
 
