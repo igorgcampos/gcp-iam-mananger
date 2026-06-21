@@ -6,8 +6,9 @@ const ROLE = 'roles/discoveryengine.user';
 const WORKFORCE_PREFIX =
   'principal://iam.googleapis.com/locations/global/workforcePools/entra-workforce/subject/';
 
+const crm = google.cloudresourcemanager({ version: 'v1', auth });
+
 async function getPolicy() {
-  const crm = google.cloudresourcemanager({ version: 'v1', auth });
   const res = await crm.projects.getIamPolicy({
     resource: PROJECT_ID,
     requestBody: {},
@@ -16,7 +17,6 @@ async function getPolicy() {
 }
 
 async function setPolicy(policy) {
-  const crm = google.cloudresourcemanager({ version: 'v1', auth });
   await crm.projects.setIamPolicy({
     resource: PROJECT_ID,
     requestBody: { policy },
@@ -28,7 +28,7 @@ async function listUsers() {
   const binding = (policy.bindings || []).find((b) => b.role === ROLE);
   if (!binding) return [];
 
-  return binding.members
+  return (binding.members || [])
     .filter((m) => m.startsWith('principal://'))
     .map((m) => ({
       email: m.split('/').pop(),
@@ -39,8 +39,8 @@ async function listUsers() {
 async function addUser(email) {
   const policy = await getPolicy();
   const principal = `${WORKFORCE_PREFIX}${email}`;
-  const bindings = policy.bindings || [];
-  const binding = bindings.find((b) => b.role === ROLE);
+  policy.bindings ??= [];
+  const binding = policy.bindings.find((b) => b.role === ROLE);
 
   if (binding && binding.members.includes(principal)) {
     const err = new Error('Usuário já possui essa permissão');
@@ -51,8 +51,7 @@ async function addUser(email) {
   if (binding) {
     binding.members.push(principal);
   } else {
-    bindings.push({ role: ROLE, members: [principal] });
-    policy.bindings = bindings;
+    policy.bindings.push({ role: ROLE, members: [principal] });
   }
 
   await setPolicy(policy);
@@ -62,8 +61,8 @@ async function addUser(email) {
 async function removeUser(email) {
   const policy = await getPolicy();
   const principal = `${WORKFORCE_PREFIX}${email}`;
-  const bindings = policy.bindings || [];
-  const binding = bindings.find((b) => b.role === ROLE);
+  policy.bindings ??= [];
+  const binding = policy.bindings.find((b) => b.role === ROLE);
 
   if (!binding) {
     const err = new Error('Role não encontrada na policy do projeto');

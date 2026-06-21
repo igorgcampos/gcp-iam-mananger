@@ -7,11 +7,6 @@ import GeminiPage from './pages/GeminiPage';
 const { Sider, Content, Header } = Layout;
 const { Title, Text } = Typography;
 
-const PAGES = {
-  iam: <IAMPage />,
-  gemini: <GeminiPage />,
-};
-
 export default function App() {
   const [selected, setSelected] = useState('iam');
   const { token } = theme.useToken();
@@ -26,7 +21,7 @@ export default function App() {
       >
         <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid rgba(255,255,255,.1)' }}>
           <Title level={5} style={{ color: '#fff', margin: 0 }}>GCP Admin</Title>
-          <Text style={{ color: 'rgba(255,255,255,.45)', fontSize: 12 }}>agentspace-469418</Text>
+          <Text style={{ color: 'rgba(255,255,255,.45)', fontSize: 12 }}>{import.meta.env.VITE_GCP_PROJECT_ID}</Text>
         </div>
         <Menu
           theme="dark"
@@ -63,7 +58,7 @@ export default function App() {
           </Title>
         </Header>
         <Content style={{ background: token.colorBgLayout }}>
-          {PAGES[selected]}
+          {selected === 'iam' ? <IAMPage /> : <GeminiPage />}
         </Content>
       </Layout>
     </Layout>

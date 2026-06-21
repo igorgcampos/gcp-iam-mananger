@@ -1,87 +1,88 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Table, Button, Modal, Form, Input, Select, Popconfirm,
-  Typography, Space, Tag, message, Card, Row, Col, Statistic, Divider, Tooltip, Badge,
+  Typography, Space, Tag, message, Card, Row, Col, Statistic, Divider, Badge,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, ReloadOutlined, RobotOutlined, SearchOutlined,
 } from '@ant-design/icons';
 import { listLicenseConfigs, listGeminiUsers, addGeminiUser, removeGeminiUser } from '../api/gemini';
+import { tierName, tierColor, formatDate } from '../utils/gemini';
+import { usePollingFetch } from '../hooks/usePollingFetch';
 
 const { Title, Text } = Typography;
-const POLL_INTERVAL = 30_000;
 
-const TIER_NAMES = {
-  SUBSCRIPTION_TIER_ENTERPRISE: 'Gemini Enterprise Standard',
-  SUBSCRIPTION_TIER_SEARCH_AND_ASSISTANT: 'Agentspace Enterprise Plus',
+const STATE_TAG = {
+  ASSIGNED: <Tag color="green">Atribuída</Tag>,
+  NO_LICENSE_ATTEMPTED_LOGIN: <Tag color="orange">Sem licença</Tag>,
 };
 
-function tierName(tier) {
-  return TIER_NAMES[tier] || tier || 'Licença';
-}
-
-function tierColor(name = '') {
-  if (name.includes('Plus')) return 'purple';
-  if (name.includes('Standard')) return 'blue';
-  return 'default';
-}
-
-function formatDate(d) {
-  if (!d || !d.year) return null;
-  return `${String(d.day).padStart(2, '0')}/${String(d.month).padStart(2, '0')}/${d.year}`;
-}
-
-function assignedCount(config, users) {
-  return users.filter(
-    (u) => u.licenseConfig === config.name && u.licenseAssignmentState === 'ASSIGNED'
-  ).length;
-}
-
-function stateTag(state) {
-  if (state === 'ASSIGNED') return <Tag color="green">Atribuída</Tag>;
-  if (state === 'NO_LICENSE_ATTEMPTED_LOGIN') return <Tag color="orange">Sem licença</Tag>;
-  return <Tag>{state}</Tag>;
+function onFetchError(err) {
+  message.error(err.response?.data?.error || err.message);
 }
 
 export default function GeminiPage() {
   const [users, setUsers] = useState([]);
   const [configs, setConfigs] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(null);
   const [search, setSearch] = useState('');
   const [form] = Form.useForm();
 
-  const fetchAll = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
+  const { loading, lastUpdated, reload } = usePollingFetch(
+    async () => {
       const [u, c] = await Promise.all([listGeminiUsers(), listLicenseConfigs()]);
       setUsers(u);
       setConfigs(c);
-      setLastUpdated(new Date());
-    } catch (err) {
-      message.error('Erro ao carregar dados: ' + (err.response?.data?.error || err.message));
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, []);
+    },
+    { onError: onFetchError }
+  );
 
-  useEffect(() => {
-    fetchAll();
-    const id = setInterval(() => fetchAll(true), POLL_INTERVAL);
-    return () => clearInterval(id);
-  }, [fetchAll]);
+  const assignedByConfig = useMemo(() => {
+    const map = {};
+    for (const u of users) {
+      if (u.licenseAssignmentState === 'ASSIGNED') {
+        map[u.licenseConfig] = (map[u.licenseConfig] || 0) + 1;
+      }
+    }
+    return map;
+  }, [users]);
+
+  const totalAssigned = useMemo(
+    () => Object.values(assignedByConfig).reduce((a, b) => a + b, 0),
+    [assignedByConfig]
+  );
+
+  const configStats = useMemo(
+    () => configs.map((c) => {
+      const total = parseInt(c.licenseCount, 10);
+      const assigned = assignedByConfig[c.name] || 0;
+      const label = tierName(c.subscriptionTier);
+      return { ...c, total, assigned, remaining: total - assigned, label, end: formatDate(c.endDate) };
+    }),
+    [configs, assignedByConfig]
+  );
+
+  const configByName = useMemo(
+    () => new Map(configStats.map((c) => [c.name, c])),
+    [configStats]
+  );
+
+  const filteredUsers = useMemo(
+    () => users.filter((u) => (u.userPrincipal || '').toLowerCase().includes(search.toLowerCase())),
+    [users, search]
+  );
 
   const handleAdd = async () => {
     try {
       const { email, licenseConfig } = await form.validateFields();
       setSubmitting(true);
-      await addGeminiUser(email, licenseConfig);
-      message.success(`${email} adicionado com licença atribuída`);
+      const normalizedEmail = email.trim().toLowerCase();
+      await addGeminiUser(normalizedEmail, licenseConfig);
+      message.success(`${normalizedEmail} adicionado com licença atribuída`);
       form.resetFields();
       setModalOpen(false);
-      fetchAll();
+      reload();
     } catch (err) {
       if (err.errorFields) return;
       message.error(err.response?.data?.error || err.message);
@@ -94,7 +95,7 @@ export default function GeminiPage() {
     try {
       await removeGeminiUser(userPrincipal);
       message.success(`Licença de ${userPrincipal} removida`);
-      fetchAll();
+      reload();
     } catch (err) {
       message.error(err.response?.data?.error || err.message);
     }
@@ -107,28 +108,23 @@ export default function GeminiPage() {
       key: 'userPrincipal',
       render: (v) => <Text strong>{v}</Text>,
       sorter: (a, b) => (a.userPrincipal || '').localeCompare(b.userPrincipal || ''),
-      filterSearch: true,
     },
     {
       title: 'Licença',
       dataIndex: 'licenseConfig',
       key: 'licenseConfig',
       render: (v) => {
-        const config = configs.find((c) => c.name === v);
-        const label = config ? tierName(config.subscriptionTier) : '—';
+        const label = configByName.get(v)?.label ?? '—';
         return v ? <Tag color={tierColor(label)}>{label}</Tag> : '—';
       },
-      filters: configs.map((c) => ({
-        text: tierName(c.subscriptionTier),
-        value: c.name,
-      })),
+      filters: configStats.map((c) => ({ text: c.label, value: c.name })),
       onFilter: (value, record) => record.licenseConfig === value,
     },
     {
       title: 'Status',
       dataIndex: 'licenseAssignmentState',
       key: 'licenseAssignmentState',
-      render: (v) => stateTag(v),
+      render: (v) => STATE_TAG[v] ?? <Tag>{v}</Tag>,
       filters: [
         { text: 'Atribuída', value: 'ASSIGNED' },
         { text: 'Sem licença', value: 'NO_LICENSE_ATTEMPTED_LOGIN' },
@@ -175,7 +171,7 @@ export default function GeminiPage() {
           <Space>
             <RobotOutlined style={{ fontSize: 20, color: '#722ed1' }} />
             <Title level={4} style={{ margin: 0 }}>Gemini Enterprise — Licenças</Title>
-            <Badge count={users.filter(u => u.licenseAssignmentState === 'ASSIGNED').length} showZero color="#722ed1" />
+            <Badge count={totalAssigned} showZero color="#722ed1" />
           </Space>
           <Space>
             {lastUpdated && (
@@ -183,7 +179,7 @@ export default function GeminiPage() {
                 Atualizado: {lastUpdated.toLocaleTimeString('pt-BR')}
               </Text>
             )}
-            <Button icon={<ReloadOutlined />} onClick={() => fetchAll()} loading={loading}>
+            <Button icon={<ReloadOutlined />} onClick={() => reload()} loading={loading}>
               Atualizar
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
@@ -192,39 +188,30 @@ export default function GeminiPage() {
           </Space>
         </Space>
 
-        {configs.length > 0 && (
+        {configStats.length > 0 && (
           <Row gutter={16}>
-            {configs.map((c) => {
-              const total = parseInt(c.licenseCount, 10);
-              const assigned = assignedCount(c, users);
-              const remaining = total - assigned;
-              const label = tierName(c.subscriptionTier);
-              const end = formatDate(c.endDate);
-              const renews = c.autoRenew;
-
-              return (
-                <Col key={c.name} xs={24} sm={12} md={8}>
-                  <Card size="small" bordered>
-                    <Statistic
-                      title={<Tag color={tierColor(label)}>{label}</Tag>}
-                      value={assigned}
-                      suffix={`/ ${total}`}
-                      valueStyle={{ color: remaining === 0 ? '#cf1322' : '#3f8600' }}
-                    />
-                    <Space direction="vertical" size={2} style={{ marginTop: 4 }}>
+            {configStats.map((c) => (
+              <Col key={c.name} xs={24} sm={12} md={8}>
+                <Card size="small" bordered>
+                  <Statistic
+                    title={<Tag color={tierColor(c.label)}>{c.label}</Tag>}
+                    value={c.assigned}
+                    suffix={`/ ${c.total}`}
+                    valueStyle={{ color: c.remaining === 0 ? '#cf1322' : '#3f8600' }}
+                  />
+                  <Space direction="vertical" size={2} style={{ marginTop: 4 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {c.remaining} slot{c.remaining !== 1 ? 's' : ''} disponível{c.remaining !== 1 ? 'eis' : ''}
+                    </Text>
+                    {c.end && (
                       <Text type="secondary" style={{ fontSize: 12 }}>
-                        {remaining} slot{remaining !== 1 ? 's' : ''} disponível{remaining !== 1 ? 'eis' : ''}
+                        {c.autoRenew ? `Renova em ${c.end}` : `Expira em ${c.end}`}
                       </Text>
-                      {end && (
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {renews ? `Renova em ${end}` : `Expira em ${end}`}
-                        </Text>
-                      )}
-                    </Space>
-                  </Card>
-                </Col>
-              );
-            })}
+                    )}
+                  </Space>
+                </Card>
+              </Col>
+            ))}
           </Row>
         )}
 
@@ -240,9 +227,7 @@ export default function GeminiPage() {
         />
 
         <Table
-          dataSource={users.filter((u) =>
-            (u.userPrincipal || '').toLowerCase().includes(search.toLowerCase())
-          )}
+          dataSource={filteredUsers}
           columns={columns}
           rowKey="userPrincipal"
           loading={loading}
@@ -279,17 +264,11 @@ export default function GeminiPage() {
             rules={[{ required: true, message: 'Selecione uma licença' }]}
           >
             <Select placeholder="Selecione a licença">
-              {configs.map((c) => {
-                const total = parseInt(c.licenseCount, 10);
-                const assigned = assignedCount(c, users);
-                const remaining = total - assigned;
-                const label = tierName(c.subscriptionTier);
-                return (
-                  <Select.Option key={c.name} value={c.name} disabled={remaining === 0}>
-                    {label} — {remaining} slot{remaining !== 1 ? 's' : ''} disponível{remaining !== 1 ? 'eis' : ''}
-                  </Select.Option>
-                );
-              })}
+              {configStats.map((c) => (
+                <Select.Option key={c.name} value={c.name} disabled={c.remaining === 0}>
+                  {c.label} — {c.remaining} slot{c.remaining !== 1 ? 's' : ''} disponível{c.remaining !== 1 ? 'eis' : ''}
+                </Select.Option>
+              ))}
             </Select>
           </Form.Item>
         </Form>
