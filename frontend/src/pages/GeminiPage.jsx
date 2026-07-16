@@ -8,6 +8,7 @@ import {
 } from '@ant-design/icons';
 import { listLicenseConfigs, listGeminiUsers, addGeminiUser, removeGeminiUser } from '../api/gemini';
 import { tierName, tierColor, stateTag, renderLicenseTag } from '../utils/licenseFormatting';
+import InactivityReportModal from '../components/InactivityReportModal';
 
 const { Title, Text } = Typography;
 const POLL_INTERVAL = 30_000;
@@ -162,6 +163,7 @@ export default function GeminiPage() {
             <Button icon={<ReloadOutlined />} onClick={() => fetchAll()} loading={loading}>
               Atualizar
             </Button>
+            <InactivityReportModal users={users} configs={configs} onRemove={handleRemove} />
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
               Adicionar usuário
             </Button>
