@@ -44,13 +44,25 @@ describe('renderLicenseTag', () => {
     { name: 'configs/a', subscriptionTier: 'SUBSCRIPTION_TIER_ENTERPRISE' },
   ];
 
-  it('renders the friendly tier name when the config is found', () => {
+  it('renders the friendly tier name in a Tag when the config is found', () => {
     render(renderLicenseTag('configs/a', configs));
     expect(screen.getByText('Gemini Enterprise Standard')).toBeInTheDocument();
   });
 
-  it('renders an em dash when the config is not found', () => {
+  it('renders a Tag with em dash and default color when the config is not found', () => {
     const { container } = render(<>{renderLicenseTag('configs/missing', configs)}</>);
+    // Should have a Tag element
+    const tag = container.querySelector('.ant-tag');
+    expect(tag).toBeInTheDocument();
+    // The Tag should contain the em dash
+    expect(tag).toHaveTextContent('—');
+  });
+
+  it('renders bare em dash (no Tag) when licenseConfigName is falsy', () => {
+    const { container } = render(<>{renderLicenseTag(undefined, configs)}</>);
+    // Should have the text
     expect(container.textContent).toBe('—');
+    // Should NOT have a Tag element
+    expect(container.querySelector('.ant-tag')).not.toBeInTheDocument();
   });
 });

@@ -28,6 +28,7 @@ export function resolveTierName(licenseConfigName, configs) {
 }
 
 export function renderLicenseTag(licenseConfigName, configs) {
-  const label = resolveTierName(licenseConfigName, configs);
-  return label ? <Tag color={tierColor(label)}>{label}</Tag> : '—';
+  if (!licenseConfigName) return '—';
+  const label = resolveTierName(licenseConfigName, configs) || '—';
+  return <Tag color={tierColor(label)}>{label}</Tag>;
 }
