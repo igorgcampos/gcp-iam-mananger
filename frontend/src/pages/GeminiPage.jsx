@@ -7,24 +7,10 @@ import {
   PlusOutlined, DeleteOutlined, ReloadOutlined, RobotOutlined, SearchOutlined,
 } from '@ant-design/icons';
 import { listLicenseConfigs, listGeminiUsers, addGeminiUser, removeGeminiUser } from '../api/gemini';
+import { tierName, tierColor, stateTag, renderLicenseTag } from '../utils/licenseFormatting';
 
 const { Title, Text } = Typography;
 const POLL_INTERVAL = 30_000;
-
-const TIER_NAMES = {
-  SUBSCRIPTION_TIER_ENTERPRISE: 'Gemini Enterprise Standard',
-  SUBSCRIPTION_TIER_SEARCH_AND_ASSISTANT: 'Agentspace Enterprise Plus',
-};
-
-function tierName(tier) {
-  return TIER_NAMES[tier] || tier || 'Licença';
-}
-
-function tierColor(name = '') {
-  if (name.includes('Plus')) return 'purple';
-  if (name.includes('Standard')) return 'blue';
-  return 'default';
-}
 
 function formatDate(d) {
   if (!d || !d.year) return null;
@@ -35,12 +21,6 @@ function assignedCount(config, users) {
   return users.filter(
     (u) => u.licenseConfig === config.name && u.licenseAssignmentState === 'ASSIGNED'
   ).length;
-}
-
-function stateTag(state) {
-  if (state === 'ASSIGNED') return <Tag color="green">Atribuída</Tag>;
-  if (state === 'NO_LICENSE_ATTEMPTED_LOGIN') return <Tag color="orange">Sem licença</Tag>;
-  return <Tag>{state}</Tag>;
 }
 
 export default function GeminiPage() {
@@ -113,11 +93,7 @@ export default function GeminiPage() {
       title: 'Licença',
       dataIndex: 'licenseConfig',
       key: 'licenseConfig',
-      render: (v) => {
-        const config = configs.find((c) => c.name === v);
-        const label = config ? tierName(config.subscriptionTier) : '—';
-        return v ? <Tag color={tierColor(label)}>{label}</Tag> : '—';
-      },
+      render: (v) => renderLicenseTag(v, configs),
       filters: configs.map((c) => ({
         text: tierName(c.subscriptionTier),
         value: c.name,
