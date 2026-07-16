@@ -1,0 +1,9 @@
+# Relatório de Usuários Inativos: on-demand e calculado no cliente
+
+O pedido original desta funcionalidade era um alerta por e-mail, enviado periodicamente, sobre usuários licenciados (Agentspace Enterprise Plus / Gemini Enterprise Standard) sem uso recente. Decidimos, em vez disso, expor um botão na tela Gemini Enterprise que abre um modal com a lista de Usuários Inativos, calculada inteiramente no frontend sobre os dados que a tela já busca em `GET /api/gemini/users` — sem novo endpoint de backend, sem scheduler (Cloud Scheduler/cron) e sem envio de e-mail.
+
+Motivo: o app é hoje 100% stateless (proxy puro para as APIs do GCP, sem banco de dados) e não está implantado em nenhum ambiente GCP — só roda localmente. Um alerta agendado por e-mail exigiria infraestrutura nova do zero (scheduler, mecanismo de envio com escopo/credencial adicional, e possivelmente persistência para não re-alertar o mesmo usuário) só para uma necessidade que, na prática, é consultada sob demanda pelo administrador. O Limite de Inatividade (em meses) também é escolhido pelo administrador a cada consulta, não fixo — o que reforça o caráter interativo/exploratório da funcionalidade, e não de alerta automático.
+
+Se no futuro surgir a necessidade real de notificação proativa (sem alguém precisar abrir a tela), isso deve ser revisitado como uma decisão nova — reaproveitando a mesma regra de Usuário Inativo definida em `CONTEXT.md`, mas exigindo infraestrutura de scheduler/e-mail que hoje não existe.
+
+**Nota lateral:** esta feature também introduziu a primeira infraestrutura de teste do frontend (Vitest + React Testing Library). `jsdom` ficou fixado em `^24` em vez do `^29` originalmente planejado porque o Node.js 18 (versão em uso neste ambiente) não roda o `jsdom@29`; ao atualizar para Node 20+, `jsdom` pode ser atualizado junto.

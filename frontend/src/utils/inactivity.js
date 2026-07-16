@@ -7,6 +7,10 @@ export function getReferenceDate(user) {
   return source ? new Date(source) : null;
 }
 
+// Reads calendar fields in local time, but the Discovery Engine API returns UTC
+// timestamps — near month boundaries this can shift the result by up to 1 month
+// in timezones behind UTC (e.g. BRT/UTC-3). Accepted: bounded, and every removal
+// is manually confirmed via Popconfirm.
 export function monthsBetween(pastDate, now) {
   let total = (now.getFullYear() - pastDate.getFullYear()) * 12 + (now.getMonth() - pastDate.getMonth());
   if (now.getDate() < pastDate.getDate()) total -= 1;
