@@ -4,7 +4,13 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "clearMocks": true
   },
   "dependencies": {
     "axios": "^1.7.9",
@@ -15,6 +21,8 @@
     "googleapis": "^144.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.9"
+    "jest": "^30.4.2",
+    "nodemon": "^3.1.9",
+    "supertest": "^7.2.2"
   }
 }

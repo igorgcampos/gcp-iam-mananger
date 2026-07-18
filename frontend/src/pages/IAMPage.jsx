@@ -1,53 +1,40 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Table, Button, Modal, Form, Input, Popconfirm,
   Typography, Space, Tag, message, Tooltip, Badge,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, ReloadOutlined, KeyOutlined, SearchOutlined } from '@ant-design/icons';
 import { listIAMUsers, addIAMUser, removeIAMUser } from '../api/iam';
+import { usePollingFetch } from '../hooks/usePollingFetch';
 
 const { Title, Text } = Typography;
-const POLL_INTERVAL = 30_000;
-const WORKFORCE_PREFIX =
-  'principal://iam.googleapis.com/locations/global/workforcePools/entra-workforce/subject/';
+
+function onFetchError(err) {
+  message.error(err.response?.data?.error || err.message);
+}
 
 export default function IAMPage() {
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(null);
   const [search, setSearch] = useState('');
   const [form] = Form.useForm();
 
-  const fetch = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const data = await listIAMUsers();
-      setUsers(data);
-      setLastUpdated(new Date());
-    } catch (err) {
-      message.error('Erro ao carregar usuários: ' + (err.response?.data?.error || err.message));
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetch();
-    const id = setInterval(() => fetch(true), POLL_INTERVAL);
-    return () => clearInterval(id);
-  }, [fetch]);
+  const { loading, lastUpdated, reload } = usePollingFetch(
+    async () => { setUsers(await listIAMUsers()); },
+    { onError: onFetchError }
+  );
 
   const handleAdd = async () => {
     try {
       const { email } = await form.validateFields();
       setSubmitting(true);
-      await addIAMUser(email);
-      message.success(`${email} adicionado com sucesso`);
+      const normalizedEmail = email.trim().toLowerCase();
+      await addIAMUser(normalizedEmail);
+      message.success(`${normalizedEmail} adicionado com sucesso`);
       form.resetFields();
       setModalOpen(false);
-      fetch();
+      reload();
     } catch (err) {
       if (err.errorFields) return;
       message.error(err.response?.data?.error || err.message);
@@ -60,11 +47,16 @@ export default function IAMPage() {
     try {
       await removeIAMUser(email);
       message.success(`${email} removido`);
-      fetch();
+      reload();
     } catch (err) {
       message.error(err.response?.data?.error || err.message);
     }
   };
+
+  const filteredUsers = useMemo(
+    () => users.filter((u) => (u.email || '').toLowerCase().includes(search.toLowerCase())),
+    [users, search]
+  );
 
   const columns = [
     {
@@ -127,7 +119,7 @@ export default function IAMPage() {
                 Atualizado: {lastUpdated.toLocaleTimeString('pt-BR')}
               </Text>
             )}
-            <Button icon={<ReloadOutlined />} onClick={() => fetch()} loading={loading}>
+            <Button icon={<ReloadOutlined />} onClick={() => reload()} loading={loading}>
               Atualizar
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
@@ -146,9 +138,7 @@ export default function IAMPage() {
         />
 
         <Table
-          dataSource={users.filter((u) =>
-            u.email.toLowerCase().includes(search.toLowerCase())
-          )}
+          dataSource={filteredUsers}
           columns={columns}
           rowKey="email"
           loading={loading}
@@ -176,12 +166,6 @@ export default function IAMPage() {
               { required: true, message: 'Informe o email' },
               { type: 'email', message: 'Email inválido' },
             ]}
-            extra={
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                Será adicionado como:<br />
-                <code>{WORKFORCE_PREFIX}<b>email@dominio.com</b></code>
-              </Text>
-            }
           >
             <Input placeholder="usuario@edglobo.com.br" autoFocus />
           </Form.Item>
