@@ -1,52 +1,44 @@
-jest.mock('googleapis', () => ({
-  google: {
-    cloudresourcemanager: jest.fn().mockReturnValue({
-      projects: {
-        getIamPolicy: jest.fn(),
-        setIamPolicy: jest.fn(),
-      },
-    }),
-  },
+jest.mock('./iamPolicyStore', () => ({
+  getPolicy: jest.fn(),
+  setPolicy: jest.fn(),
 }));
 
-jest.mock('./gcpAuth', () => ({ auth: {} }));
+jest.mock('./principalProbe', () => ({
+  validateAndCleanup: jest.fn(),
+}));
 
-// iamService deve ser carregado primeiro — ele chama cloudresourcemanager() ao inicializar
 const { listUsers, addUser, removeUser } = require('./iamService');
-
-const { google } = require('googleapis');
-const crm = google.cloudresourcemanager.mock.results[0].value;
-const { getIamPolicy, setIamPolicy } = crm.projects;
+const { getPolicy, setPolicy } = require('./iamPolicyStore');
+const { validateAndCleanup } = require('./principalProbe');
 
 const ROLE = 'roles/discoveryengine.user';
 const PREFIX = 'principal://iam.googleapis.com/locations/global/workforcePools/entra-workforce/subject/';
 
 function makePolicy(members = []) {
   return {
-    data: {
-      etag: 'abc123',
-      bindings: members.length ? [{ role: ROLE, members }] : [],
-    },
+    etag: 'abc123',
+    bindings: members.length ? [{ role: ROLE, members }] : [],
   };
 }
 
 beforeEach(() => {
-  setIamPolicy.mockResolvedValue({});
+  setPolicy.mockResolvedValue({});
+  validateAndCleanup.mockImplementation(async (policy) => JSON.parse(JSON.stringify(policy)));
 });
 
 describe('listUsers', () => {
   test('retorna lista vazia quando não há binding para a role', async () => {
-    getIamPolicy.mockResolvedValue({ data: { bindings: [] } });
+    getPolicy.mockResolvedValue({ bindings: [] });
     expect(await listUsers()).toEqual([]);
   });
 
   test('retorna lista vazia quando bindings é undefined', async () => {
-    getIamPolicy.mockResolvedValue({ data: {} });
+    getPolicy.mockResolvedValue({});
     expect(await listUsers()).toEqual([]);
   });
 
   test('retorna usuários mapeados de membros existentes', async () => {
-    getIamPolicy.mockResolvedValue(
+    getPolicy.mockResolvedValue(
       makePolicy([`${PREFIX}a@exemplo.com`, `${PREFIX}b@exemplo.com`])
     );
     const users = await listUsers();
@@ -57,7 +49,7 @@ describe('listUsers', () => {
   });
 
   test('ignora membros que não começam com "principal://"', async () => {
-    getIamPolicy.mockResolvedValue(
+    getPolicy.mockResolvedValue(
       makePolicy([`${PREFIX}a@exemplo.com`, 'user:outro@exemplo.com'])
     );
     const users = await listUsers();
@@ -68,17 +60,17 @@ describe('listUsers', () => {
 
 describe('addUser', () => {
   test('adiciona membro ao binding existente', async () => {
-    getIamPolicy.mockResolvedValue(makePolicy([`${PREFIX}ja@existe.com`]));
+    getPolicy.mockResolvedValue(makePolicy([`${PREFIX}ja@existe.com`]));
     await addUser('novo@exemplo.com');
-    const policy = setIamPolicy.mock.calls[0][0].requestBody.policy;
+    const policy = setPolicy.mock.calls[0][0];
     const binding = policy.bindings.find((b) => b.role === ROLE);
     expect(binding.members).toContain(`${PREFIX}novo@exemplo.com`);
   });
 
   test('cria novo binding quando a role não existe', async () => {
-    getIamPolicy.mockResolvedValue({ data: { etag: 'x', bindings: [] } });
+    getPolicy.mockResolvedValue({ etag: 'x', bindings: [] });
     await addUser('primeiro@exemplo.com');
-    const policy = setIamPolicy.mock.calls[0][0].requestBody.policy;
+    const policy = setPolicy.mock.calls[0][0];
     expect(policy.bindings).toContainEqual({
       role: ROLE,
       members: [`${PREFIX}primeiro@exemplo.com`],
@@ -86,52 +78,100 @@ describe('addUser', () => {
   });
 
   test('cria binding quando policy.bindings é undefined', async () => {
-    getIamPolicy.mockResolvedValue({ data: { etag: 'x' } });
+    getPolicy.mockResolvedValue({ etag: 'x' });
     await addUser('novo@exemplo.com');
-    const policy = setIamPolicy.mock.calls[0][0].requestBody.policy;
+    const policy = setPolicy.mock.calls[0][0];
     expect(policy.bindings).toHaveLength(1);
   });
 
   test('lança 409 quando usuário já possui a role', async () => {
-    getIamPolicy.mockResolvedValue(makePolicy([`${PREFIX}ja@existe.com`]));
+    getPolicy.mockResolvedValue(makePolicy([`${PREFIX}ja@existe.com`]));
     const err = await addUser('ja@existe.com').catch((e) => e);
     expect(err.status).toBe(409);
-    expect(setIamPolicy).not.toHaveBeenCalled();
+    expect(setPolicy).not.toHaveBeenCalled();
+    expect(validateAndCleanup).not.toHaveBeenCalled();
   });
 
   test('retorna objeto com email e principal', async () => {
-    getIamPolicy.mockResolvedValue({ data: { bindings: [] } });
+    getPolicy.mockResolvedValue({ bindings: [] });
     const result = await addUser('novo@exemplo.com');
     expect(result).toEqual({
       email: 'novo@exemplo.com',
       principal: `${PREFIX}novo@exemplo.com`,
     });
   });
+
+  test('valida o principal via probe antes de conceder a role', async () => {
+    getPolicy.mockResolvedValue({ bindings: [] });
+    await addUser('novo@exemplo.com');
+    expect(validateAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ bindings: [] }),
+      'novo@exemplo.com'
+    );
+  });
+
+  test('concede a role usando a policy limpa retornada pelo probe', async () => {
+    getPolicy.mockResolvedValue({ bindings: [] });
+    validateAndCleanup.mockResolvedValue({ etag: 'pos-probe', bindings: [] });
+
+    await addUser('novo@exemplo.com');
+
+    const policy = setPolicy.mock.calls[0][0];
+    expect(policy.etag).toBe('pos-probe');
+    expect(policy.bindings).toContainEqual({
+      role: ROLE,
+      members: [`${PREFIX}novo@exemplo.com`],
+    });
+  });
+
+  test('propaga o erro do probe (422) sem conceder a role', async () => {
+    getPolicy.mockResolvedValue({ bindings: [] });
+    const notSynced = new Error('Usuário não sincronizado. Solicite ao time de AD.');
+    notSynced.status = 422;
+    validateAndCleanup.mockRejectedValue(notSynced);
+
+    const err = await addUser('naosincronizado@exemplo.com').catch((e) => e);
+
+    expect(err.status).toBe(422);
+    expect(setPolicy).not.toHaveBeenCalled();
+  });
+
+  test('propaga o erro genérico do probe (500) sem conceder a role', async () => {
+    getPolicy.mockResolvedValue({ bindings: [] });
+    const generic = new Error('Falha ao validar usuário. Tente novamente.');
+    generic.status = 500;
+    validateAndCleanup.mockRejectedValue(generic);
+
+    const err = await addUser('qualquer@exemplo.com').catch((e) => e);
+
+    expect(err.status).toBe(500);
+    expect(setPolicy).not.toHaveBeenCalled();
+  });
 });
 
 describe('removeUser', () => {
   test('remove membro do binding existente', async () => {
-    getIamPolicy.mockResolvedValue(
+    getPolicy.mockResolvedValue(
       makePolicy([`${PREFIX}a@exemplo.com`, `${PREFIX}b@exemplo.com`])
     );
     await removeUser('a@exemplo.com');
-    const policy = setIamPolicy.mock.calls[0][0].requestBody.policy;
+    const policy = setPolicy.mock.calls[0][0];
     const binding = policy.bindings.find((b) => b.role === ROLE);
     expect(binding.members).not.toContain(`${PREFIX}a@exemplo.com`);
     expect(binding.members).toContain(`${PREFIX}b@exemplo.com`);
   });
 
   test('lança 404 quando a role não existe na policy', async () => {
-    getIamPolicy.mockResolvedValue({ data: { bindings: [] } });
+    getPolicy.mockResolvedValue({ bindings: [] });
     const err = await removeUser('qualquer@exemplo.com').catch((e) => e);
     expect(err.status).toBe(404);
-    expect(setIamPolicy).not.toHaveBeenCalled();
+    expect(setPolicy).not.toHaveBeenCalled();
   });
 
   test('lança 404 quando usuário não está na role', async () => {
-    getIamPolicy.mockResolvedValue(makePolicy([`${PREFIX}outro@exemplo.com`]));
+    getPolicy.mockResolvedValue(makePolicy([`${PREFIX}outro@exemplo.com`]));
     const err = await removeUser('naoexiste@exemplo.com').catch((e) => e);
     expect(err.status).toBe(404);
-    expect(setIamPolicy).not.toHaveBeenCalled();
+    expect(setPolicy).not.toHaveBeenCalled();
   });
 });

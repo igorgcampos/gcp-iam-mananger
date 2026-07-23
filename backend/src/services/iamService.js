@@ -1,27 +1,9 @@
-const { google } = require('googleapis');
-const { auth } = require('./gcpAuth');
+const { getPolicy, setPolicy } = require('./iamPolicyStore');
+const { validateAndCleanup } = require('./principalProbe');
 
-const PROJECT_ID = process.env.GCP_PROJECT_ID;
 const ROLE = 'roles/discoveryengine.user';
 const WORKFORCE_PREFIX =
   'principal://iam.googleapis.com/locations/global/workforcePools/entra-workforce/subject/';
-
-const crm = google.cloudresourcemanager({ version: 'v1', auth });
-
-async function getPolicy() {
-  const res = await crm.projects.getIamPolicy({
-    resource: PROJECT_ID,
-    requestBody: {},
-  });
-  return res.data;
-}
-
-async function setPolicy(policy) {
-  await crm.projects.setIamPolicy({
-    resource: PROJECT_ID,
-    requestBody: { policy },
-  });
-}
 
 async function listUsers() {
   const policy = await getPolicy();
@@ -48,13 +30,17 @@ async function addUser(email) {
     throw err;
   }
 
-  if (binding) {
-    binding.members.push(principal);
+  const cleanPolicy = await validateAndCleanup(policy, email);
+  cleanPolicy.bindings ??= [];
+  const cleanBinding = cleanPolicy.bindings.find((b) => b.role === ROLE);
+
+  if (cleanBinding) {
+    cleanBinding.members.push(principal);
   } else {
-    policy.bindings.push({ role: ROLE, members: [principal] });
+    cleanPolicy.bindings.push({ role: ROLE, members: [principal] });
   }
 
-  await setPolicy(policy);
+  await setPolicy(cleanPolicy);
   return { email, principal };
 }
 

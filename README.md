@@ -33,10 +33,13 @@ Crie uma service account no projeto `agentspace-469418` com as seguintes roles:
 |------|----------|
 | `roles/discoveryengine.agentspaceAdmin` | Gerenciar licenças Gemini Enterprise |
 | `roles/iam.securityAdmin` | Gerenciar a role `discoveryengine.user` no IAM |
+| `roles/iam.roleAdmin` | Auto-provisionar a custom role `iamValidationProbe`, usada para validar o principal antes de conceder acesso (ver [ADR 0002](docs/adr/0002-validacao-de-principal-via-probe-descartavel.md)) |
 
 Baixe a chave JSON e salve em `backend/credentials.json`.
 
 > **Por que duas roles separadas?** IAM policy do projeto (`setIamPolicy`) e a Discovery Engine API são sistemas distintos no GCP — cada um exige sua própria permissão.
+
+Habilite também a **Identity and Access Management (IAM) API** no projeto (Cloud Console → APIs & Services), necessária para o auto-provisionamento da custom role `iamValidationProbe`.
 
 ### Variáveis de ambiente (`backend/.env`)
 
@@ -62,7 +65,7 @@ A interface exibe apenas o email (a última parte após `/`).
 
 **Adicionar usuário:** basta digitar o email — o prefixo do workforce pool é preenchido automaticamente.
 
-**Validação:** antes de adicionar, o backend verifica se o usuário já tem a role. Se tiver, retorna erro `409` com mensagem clara.
+**Validação:** antes de adicionar, o backend verifica se o usuário já tem a role (erro `409` se tiver) e, em seguida, valida se o email já possui Identidade Sincronizada — via probe descartável numa custom role sem poder real (ver [ADR 0002](docs/adr/0002-validacao-de-principal-via-probe-descartavel.md)). Se o email não estiver sincronizado, retorna `422` orientando a falar com o time de AD; qualquer outra falha técnica no probe retorna `500` com mensagem genérica.
 
 ### Tela Gemini Enterprise — Licenças
 
@@ -203,7 +206,10 @@ ed-globo/
 │   │   │   └── gemini.js             Endpoints GET/POST/DELETE /api/gemini
 │   │   └── services/
 │   │       ├── gcpAuth.js            GoogleAuth (service account)
-│   │       ├── iamService.js         getIamPolicy / setIamPolicy
+│   │       ├── gcpClients.js         Clientes googleapis (crm, iam)
+│   │       ├── iamPolicyStore.js     getPolicy / setPolicy (policy v3)
+│   │       ├── principalProbe.js     Probe descartável de validação de principal
+│   │       ├── iamService.js         listUsers / addUser / removeUser
 │   │       └── geminiService.js      Discovery Engine API
 │   └── .env.example
 └── frontend/

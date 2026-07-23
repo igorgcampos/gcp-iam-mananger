@@ -72,6 +72,15 @@ describe('POST /api/iam/users', () => {
     const res = await request(app).post('/api/iam/users').send({ email: 'ja@existe.com' });
     expect(res.status).toBe(409);
   });
+
+  test('retorna 422 quando o probe de validação indica que o usuário não está sincronizado', async () => {
+    const err = new Error('Usuário não sincronizado. Solicite ao time de AD.');
+    err.status = 422;
+    addUser.mockRejectedValue(err);
+    const res = await request(app).post('/api/iam/users').send({ email: 'naosincronizado@b.com' });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toMatch(/AD/);
+  });
 });
 
 describe('DELETE /api/iam/users/:email', () => {
