@@ -5,3 +5,8 @@ backend/.env
 backend/credentials.json
 dist/
 .DS_Store
+.claude/skills/
+.agents/skills/
+.claude/settings.local.json
+# Logs locais
+*.log
