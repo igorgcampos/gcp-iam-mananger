@@ -66,6 +66,7 @@ export default function InactivityReportModal({ users, configs, onRemove }) {
       title: 'Ações',
       key: 'actions',
       width: 110,
+      fixed: 'right',
       render: (_, record) => (
         <Popconfirm
           title={`Remover licença de ${record.userPrincipal}?`}
@@ -91,7 +92,9 @@ export default function InactivityReportModal({ users, configs, onRemove }) {
         open={open}
         onCancel={() => setOpen(false)}
         footer={null}
-        width={900}
+        width="90vw"
+        style={{ maxWidth: 1200 }}
+        centered
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <Space>
@@ -115,6 +118,7 @@ export default function InactivityReportModal({ users, configs, onRemove }) {
             rowKey="userPrincipal"
             pagination={{ pageSize: 10 }}
             size="small"
+            scroll={{ x: 'max-content', y: 'calc(100vh - 380px)' }}
             locale={{ emptyText: 'Nenhum usuário inativo neste período' }}
           />
         </Space>
