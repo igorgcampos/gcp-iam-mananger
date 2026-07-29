@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useLayoutEffect } from 'react';
 import {
   Table, Button, Modal, Form, Input, Select, Popconfirm,
   Typography, Space, Tag, message, Card, Row, Col, Statistic, Divider, Badge,
@@ -18,7 +18,12 @@ function onFetchError(err) {
   message.error(err.response?.data?.error || err.message);
 }
 
+const CARD_SPAN = 8; // matches Col md={8} below
+
 export default function GeminiPage() {
+  const contentRef = useRef(null);
+  const firstCardRef = useRef(null);
+  const [titleOffsetPx, setTitleOffsetPx] = useState(0);
   const [users, setUsers] = useState([]);
   const [configs, setConfigs] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -59,6 +64,23 @@ export default function GeminiPage() {
     }),
     [configs, assignedByConfig]
   );
+
+  useLayoutEffect(() => {
+    if (!configStats.length || !contentRef.current || !firstCardRef.current) {
+      setTitleOffsetPx(0);
+      return undefined;
+    }
+    const measure = () => {
+      const containerLeft = contentRef.current.getBoundingClientRect().left;
+      const cardLeft = firstCardRef.current.getBoundingClientRect().left;
+      setTitleOffsetPx(Math.max(0, cardLeft - containerLeft));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(contentRef.current);
+    observer.observe(firstCardRef.current);
+    return () => observer.disconnect();
+  }, [configStats.length]);
 
   const filteredUsers = useMemo(
     () => users.filter((u) => (u.userPrincipal || '').toLowerCase().includes(search.toLowerCase())),
@@ -155,11 +177,12 @@ export default function GeminiPage() {
 
   return (
     <div style={{ padding: 24 }}>
+      <div ref={contentRef}>
       <Space direction="vertical" style={{ width: '100%' }} size="large">
         <Space style={{ justifyContent: 'space-between', width: '100%' }}>
-          <Space>
+          <Space style={{ marginLeft: titleOffsetPx, flexShrink: 0 }}>
             <RobotOutlined style={{ fontSize: 20, color: '#722ed1' }} />
-            <Title level={4} style={{ margin: 0 }}>Gemini Enterprise — Licenças</Title>
+            <Title level={4} style={{ margin: 0, whiteSpace: 'nowrap' }}>Gemini Enterprise — Licenças</Title>
             <Badge count={totalAssigned} showZero color="#722ed1" />
           </Space>
           <Space>
@@ -179,10 +202,10 @@ export default function GeminiPage() {
         </Space>
 
         {configStats.length > 0 && (
-          <Row gutter={16}>
-            {configStats.map((c) => (
-              <Col key={c.name} xs={24} sm={12} md={8}>
-                <Card size="small" bordered>
+          <Row gutter={16} justify="center">
+            {configStats.map((c, idx) => (
+              <Col key={c.name} xs={24} sm={12} md={CARD_SPAN}>
+                <Card size="small" bordered ref={idx === 0 ? firstCardRef : undefined}>
                   <Statistic
                     title={<Tag color={tierColor(c.label)}>{c.label}</Tag>}
                     value={c.assigned}
@@ -227,6 +250,7 @@ export default function GeminiPage() {
           locale={{ emptyText: 'Nenhum usuário encontrado' }}
         />
       </Space>
+      </div>
 
       <Modal
         title="Adicionar usuário ao Gemini Enterprise"
