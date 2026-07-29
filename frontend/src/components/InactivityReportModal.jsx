@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { Button, Modal, Select, Table, Tag, Typography, Space, Popconfirm } from 'antd';
-import { ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Button, Modal, Select, Table, Tag, Typography, Space, Popconfirm, message } from 'antd';
+import { ClockCircleOutlined, CopyOutlined, DeleteOutlined } from '@ant-design/icons';
 import { renderLicenseTag, stateTag } from '../utils/licenseFormatting';
 import {
   DEFAULT_INACTIVITY_MONTHS,
   INACTIVITY_MONTH_OPTIONS,
   buildInactivityReport,
+  buildInactivityReportClipboard,
+  formatDatePtBr,
   formatMonthsInactive,
 } from '../utils/inactivity';
 
@@ -24,6 +26,25 @@ export default function InactivityReportModal({ users, configs, onRemove }) {
     () => buildInactivityReport(users, thresholdMonths),
     [users, thresholdMonths]
   );
+
+  const handleCopy = async () => {
+    const { html, text } = buildInactivityReportClipboard(report, configs);
+    try {
+      if (navigator.clipboard.write && typeof ClipboardItem !== 'undefined') {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([text], { type: 'text/plain' }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      message.success('Tabela copiada!');
+    } catch {
+      message.error('Não foi possível copiar a tabela.');
+    }
+  };
 
   const columns = [
     {
@@ -48,13 +69,13 @@ export default function InactivityReportModal({ users, configs, onRemove }) {
       title: 'Atribuída em',
       dataIndex: 'createTime',
       key: 'createTime',
-      render: (v) => (v ? new Date(v).toLocaleDateString('pt-BR') : '—'),
+      render: (v) => formatDatePtBr(v),
     },
     {
       title: 'Último acesso',
       dataIndex: 'lastLoginTime',
       key: 'lastLoginTime',
-      render: (v) => (v ? new Date(v).toLocaleDateString('pt-BR') : '—'),
+      render: (v) => formatDatePtBr(v),
     },
     {
       title: 'Tempo inativo',
@@ -109,9 +130,19 @@ export default function InactivityReportModal({ users, configs, onRemove }) {
               }))}
             />
           </Space>
-          <Text type="secondary">
-            {report.length} de {assignedTotal} usuários inativos
-          </Text>
+          <Space>
+            <Text type="secondary">
+              {report.length} de {assignedTotal} usuários inativos
+            </Text>
+            <Button
+              icon={<CopyOutlined />}
+              size="small"
+              onClick={handleCopy}
+              disabled={report.length === 0}
+            >
+              Copiar tabela
+            </Button>
+          </Space>
           <Table
             dataSource={report}
             columns={columns}

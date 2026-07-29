@@ -24,6 +24,15 @@ const configs = [
   { name: 'configs/enterprise', subscriptionTier: 'SUBSCRIPTION_TIER_ENTERPRISE' },
 ];
 
+function readBlobText(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsText(blob);
+  });
+}
+
 const users = [
   {
     userPrincipal: 'caio.rosa@oglobo.com.br',
@@ -92,5 +101,56 @@ describe('InactivityReportModal', () => {
     await user.click(await screen.findByRole('button', { name: /^remover$/i }));
 
     expect(onRemove).toHaveBeenCalledWith('luan.oliveira@oglobo.com.br');
+  });
+
+  it('copies the report as an HTML table plus tab-separated text when "Copiar tabela" is clicked', async () => {
+    const user = userEvent.setup();
+    const writeMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { write: writeMock }, configurable: true });
+    window.ClipboardItem = class {
+      constructor(items) {
+        this.items = items;
+      }
+    };
+
+    render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
+    await user.click(screen.getByRole('button', { name: /copiar tabela/i }));
+
+    expect(writeMock).toHaveBeenCalledTimes(1);
+    const clipboardItem = writeMock.mock.calls[0][0][0];
+    const [text, html] = await Promise.all([
+      readBlobText(clipboardItem.items['text/plain']),
+      readBlobText(clipboardItem.items['text/html']),
+    ]);
+    expect(text).toContain('luan.oliveira@oglobo.com.br');
+    expect(html).toContain('<table');
+
+    expect(await screen.findByText(/tabela copiada/i)).toBeInTheDocument();
+  });
+
+  it('falls back to plain-text copy when the rich clipboard API is unavailable', async () => {
+    const user = userEvent.setup();
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: writeTextMock }, configurable: true });
+    delete window.ClipboardItem;
+
+    render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
+    await user.click(screen.getByRole('button', { name: /copiar tabela/i }));
+
+    expect(writeTextMock).toHaveBeenCalledTimes(1);
+    expect(writeTextMock.mock.calls[0][0]).toContain('luan.oliveira@oglobo.com.br');
+  });
+
+  it('disables the copy button when there are no inactive users to report', async () => {
+    const user = userEvent.setup();
+    render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
+
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByText('12 meses'));
+
+    expect(screen.getByRole('button', { name: /copiar tabela/i })).toBeDisabled();
   });
 });

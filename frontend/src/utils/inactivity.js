@@ -1,3 +1,5 @@
+import { resolveTierName, stateLabel } from './licenseFormatting.jsx';
+
 export const DEFAULT_INACTIVITY_MONTHS = 2;
 
 export const INACTIVITY_MONTH_OPTIONS = [1, 2, 3, 6, 12];
@@ -33,4 +35,32 @@ export function buildInactivityReport(users, thresholdMonths, now = new Date()) 
 
 export function formatMonthsInactive(months) {
   return `${months} ${months === 1 ? 'mês' : 'meses'}`;
+}
+
+export function formatDatePtBr(value) {
+  return value ? new Date(value).toLocaleDateString('pt-BR') : '—';
+}
+
+const CLIPBOARD_HEADERS = ['Email', 'Licença', 'Status', 'Atribuída em', 'Último acesso', 'Tempo inativo'];
+
+export function buildInactivityReportClipboard(report, configs) {
+  const rows = report.map((u) => [
+    u.userPrincipal,
+    resolveTierName(u.licenseConfig, configs) || '—',
+    stateLabel(u.licenseAssignmentState),
+    formatDatePtBr(u.createTime),
+    formatDatePtBr(u.lastLoginTime),
+    formatMonthsInactive(u.monthsInactive),
+  ]);
+
+  const text = [CLIPBOARD_HEADERS, ...rows].map((row) => row.join('\t')).join('\n');
+
+  const cellStyle = 'border:1px solid #ccc;padding:4px 8px;text-align:left';
+  const headerRow = CLIPBOARD_HEADERS.map((h) => `<th style="${cellStyle};background:#fafafa">${h}</th>`).join('');
+  const bodyRows = rows
+    .map((row) => `<tr>${row.map((cell) => `<td style="${cellStyle}">${cell}</td>`).join('')}</tr>`)
+    .join('');
+  const html = `<table style="border-collapse:collapse;font-family:sans-serif;font-size:13px"><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+
+  return { html, text };
 }

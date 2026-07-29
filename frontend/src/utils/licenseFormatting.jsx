@@ -16,10 +16,22 @@ export function tierColor(name = '') {
   return 'default';
 }
 
+const STATE_LABELS = {
+  ASSIGNED: 'Atribuída',
+  NO_LICENSE_ATTEMPTED_LOGIN: 'Sem licença',
+};
+
+const STATE_COLORS = {
+  ASSIGNED: 'green',
+  NO_LICENSE_ATTEMPTED_LOGIN: 'orange',
+};
+
+export function stateLabel(state) {
+  return STATE_LABELS[state] || state;
+}
+
 export function stateTag(state) {
-  if (state === 'ASSIGNED') return <Tag color="green">Atribuída</Tag>;
-  if (state === 'NO_LICENSE_ATTEMPTED_LOGIN') return <Tag color="orange">Sem licença</Tag>;
-  return <Tag>{state}</Tag>;
+  return <Tag color={STATE_COLORS[state]}>{stateLabel(state)}</Tag>;
 }
 
 export function resolveTierName(licenseConfigName, configs) {

@@ -7,6 +7,7 @@ import {
   isInactiveUser,
   buildInactivityReport,
   formatMonthsInactive,
+  buildInactivityReportClipboard,
 } from './inactivity';
 
 describe('constants', () => {
@@ -110,5 +111,67 @@ describe('formatMonthsInactive', () => {
     expect(formatMonthsInactive(1)).toBe('1 mês');
     expect(formatMonthsInactive(4)).toBe('4 meses');
     expect(formatMonthsInactive(0)).toBe('0 meses');
+  });
+});
+
+describe('buildInactivityReportClipboard', () => {
+  const configs = [
+    { name: 'configs/enterprise', subscriptionTier: 'SUBSCRIPTION_TIER_ENTERPRISE' },
+  ];
+
+  it('renders the header row and one tab-separated data row matching the on-screen columns', () => {
+    const report = [
+      {
+        userPrincipal: 'luan.oliveira@oglobo.com.br',
+        licenseConfig: 'configs/enterprise',
+        licenseAssignmentState: 'ASSIGNED',
+        createTime: '2025-10-01T00:00:00',
+        lastLoginTime: '2025-10-01T00:00:00',
+        monthsInactive: 9,
+      },
+    ];
+
+    const { text } = buildInactivityReportClipboard(report, configs);
+    const lines = text.split('\n');
+
+    expect(lines[0]).toBe('Email\tLicença\tStatus\tAtribuída em\tÚltimo acesso\tTempo inativo');
+    expect(lines[1]).toBe(
+      'luan.oliveira@oglobo.com.br\tGemini Enterprise Standard\tAtribuída\t01/10/2025\t01/10/2025\t9 meses'
+    );
+  });
+
+  it('renders one row per user, an em dash for a never-logged-in user, and an HTML table with matching cells', () => {
+    const report = [
+      {
+        userPrincipal: 'luan.oliveira@oglobo.com.br',
+        licenseConfig: 'configs/enterprise',
+        licenseAssignmentState: 'ASSIGNED',
+        createTime: '2025-10-01T00:00:00',
+        lastLoginTime: '2025-10-01T00:00:00',
+        monthsInactive: 9,
+      },
+      {
+        userPrincipal: 'caio.rosa@oglobo.com.br',
+        licenseConfig: 'configs/enterprise',
+        licenseAssignmentState: 'ASSIGNED',
+        createTime: '2026-06-08T00:00:00',
+        lastLoginTime: null,
+        monthsInactive: 2,
+      },
+    ];
+
+    const { text, html } = buildInactivityReportClipboard(report, configs);
+    const lines = text.split('\n');
+
+    expect(lines).toHaveLength(3);
+    expect(lines[2]).toBe(
+      'caio.rosa@oglobo.com.br\tGemini Enterprise Standard\tAtribuída\t08/06/2026\t—\t2 meses'
+    );
+
+    expect(html).toContain('<table');
+    expect(html).toContain('<th');
+    expect(html).toContain('Email');
+    // 1 header row + 2 data rows
+    expect((html.match(/<tr>/g) || []).length).toBe(3);
   });
 });
