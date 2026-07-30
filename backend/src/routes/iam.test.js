@@ -2,6 +2,8 @@ jest.mock('../services/iamService', () => ({
   listUsers: jest.fn(),
   addUser: jest.fn(),
   removeUser: jest.fn(),
+  addCodeAssistUser: jest.fn(),
+  removeCodeAssistUser: jest.fn(),
 }));
 
 jest.mock('../services/geminiService', () => ({
@@ -19,7 +21,7 @@ jest.mock('googleapis', () => ({
 
 const request = require('supertest');
 const app = require('../app');
-const { listUsers, addUser, removeUser } = require('../services/iamService');
+const { listUsers, addUser, removeUser, addCodeAssistUser, removeCodeAssistUser } = require('../services/iamService');
 
 describe('GET /api/iam/users', () => {
   test('retorna lista de usuários com status 200', async () => {
@@ -50,7 +52,19 @@ describe('POST /api/iam/users', () => {
   test('normaliza email para minúsculas antes de chamar o serviço', async () => {
     addUser.mockResolvedValue({ email: 'novo@b.com', principal: '' });
     await request(app).post('/api/iam/users').send({ email: 'NOVO@B.COM' });
-    expect(addUser).toHaveBeenCalledWith('novo@b.com');
+    expect(addUser).toHaveBeenCalledWith('novo@b.com', { codeAssist: false });
+  });
+
+  test('envia codeAssist=true quando o checkbox foi marcado', async () => {
+    addUser.mockResolvedValue({ email: 'novo@b.com', principal: '', codeAssist: { granted: true } });
+    await request(app).post('/api/iam/users').send({ email: 'novo@b.com', codeAssist: true });
+    expect(addUser).toHaveBeenCalledWith('novo@b.com', { codeAssist: true });
+  });
+
+  test('envia codeAssist=false por padrão quando não informado', async () => {
+    addUser.mockResolvedValue({ email: 'novo@b.com', principal: '' });
+    await request(app).post('/api/iam/users').send({ email: 'novo@b.com' });
+    expect(addUser).toHaveBeenCalledWith('novo@b.com', { codeAssist: false });
   });
 
   test('retorna 400 sem email', async () => {
@@ -96,6 +110,64 @@ describe('DELETE /api/iam/users/:email', () => {
     err.status = 404;
     removeUser.mockRejectedValue(err);
     const res = await request(app).delete('/api/iam/users/nao%40existe.com');
+    expect(res.status).toBe(404);
+  });
+
+  test('retorna 502 quando a revogação do Code Assist bloqueia a remoção', async () => {
+    const err = new Error('Falha ao revogar Code Assist; discoveryengine.user não foi removido.');
+    err.status = 502;
+    removeUser.mockRejectedValue(err);
+    const res = await request(app).delete('/api/iam/users/user%40b.com');
+    expect(res.status).toBe(502);
+  });
+});
+
+describe('POST /api/iam/users/:email/code-assist', () => {
+  test('retorna 201 ao conceder Code Assist', async () => {
+    addCodeAssistUser.mockResolvedValue({ email: 'a@b.com', member: 'user:a@b.com' });
+    const res = await request(app).post('/api/iam/users/a%40b.com/code-assist');
+    expect(res.status).toBe(201);
+    expect(addCodeAssistUser).toHaveBeenCalledWith('a@b.com');
+  });
+
+  test('retorna 409 quando o usuário já possui Code Assist', async () => {
+    const err = new Error('Usuário já possui essa permissão');
+    err.status = 409;
+    addCodeAssistUser.mockRejectedValue(err);
+    const res = await request(app).post('/api/iam/users/a%40b.com/code-assist');
+    expect(res.status).toBe(409);
+  });
+
+  test('retorna 422 quando o probe indica que o usuário não está sincronizado', async () => {
+    const err = new Error('Usuário não sincronizado. Solicite ao time de AD.');
+    err.status = 422;
+    addCodeAssistUser.mockRejectedValue(err);
+    const res = await request(app).post('/api/iam/users/a%40b.com/code-assist');
+    expect(res.status).toBe(422);
+  });
+
+  test('retorna 404 quando o usuário não possui discoveryengine.user', async () => {
+    const err = new Error('Usuário precisa ter discoveryengine.user antes de receber o Code Assist');
+    err.status = 404;
+    addCodeAssistUser.mockRejectedValue(err);
+    const res = await request(app).post('/api/iam/users/semrole%40b.com/code-assist');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('DELETE /api/iam/users/:email/code-assist', () => {
+  test('retorna 204 ao revogar Code Assist', async () => {
+    removeCodeAssistUser.mockResolvedValue();
+    const res = await request(app).delete('/api/iam/users/a%40b.com/code-assist');
+    expect(res.status).toBe(204);
+    expect(removeCodeAssistUser).toHaveBeenCalledWith('a@b.com');
+  });
+
+  test('retorna 404 quando o usuário não possui Code Assist', async () => {
+    const err = new Error('Usuário não encontrado com essa role');
+    err.status = 404;
+    removeCodeAssistUser.mockRejectedValue(err);
+    const res = await request(app).delete('/api/iam/users/a%40b.com/code-assist');
     expect(res.status).toBe(404);
   });
 });

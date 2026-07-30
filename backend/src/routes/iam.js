@@ -1,5 +1,7 @@
 const { Router } = require('express');
-const { listUsers, addUser, removeUser } = require('../services/iamService');
+const {
+  listUsers, addUser, removeUser, addCodeAssistUser, removeCodeAssistUser,
+} = require('../services/iamService');
 const validateEmail = require('../middleware/validateEmail');
 const asyncRoute = require('../middleware/asyncRoute');
 
@@ -10,12 +12,24 @@ router.get('/users', asyncRoute(async (req, res) => {
 }));
 
 router.post('/users', validateEmail, asyncRoute(async (req, res) => {
-  const result = await addUser(req.body.email.trim().toLowerCase());
+  const result = await addUser(req.body.email.trim().toLowerCase(), {
+    codeAssist: !!req.body.codeAssist,
+  });
   res.status(201).json(result);
 }));
 
 router.delete('/users/:email', asyncRoute(async (req, res) => {
   await removeUser(decodeURIComponent(req.params.email));
+  res.status(204).send();
+}));
+
+router.post('/users/:email/code-assist', asyncRoute(async (req, res) => {
+  const result = await addCodeAssistUser(decodeURIComponent(req.params.email));
+  res.status(201).json(result);
+}));
+
+router.delete('/users/:email/code-assist', asyncRoute(async (req, res) => {
+  await removeCodeAssistUser(decodeURIComponent(req.params.email));
   res.status(204).send();
 }));
 
