@@ -28,6 +28,10 @@ _Avoid_: Inactive user (ok em código), usuário ocioso
 O número de meses, escolhido pelo administrador no momento da consulta, usado para decidir se a Data de Referência de uma Atribuição é antiga demais. Não é um valor fixo do sistema — varia por consulta.
 _Avoid_: Inactivity threshold (ok em código), corte, cutoff
 
+**Remoção de Licença**:
+A ação administrativa (disponível nas telas "Gemini Enterprise" e "Relatório de Usuários Inativos") que encerra a Atribuição de um usuário. Além de remover a Licença, hoje ela também revoga o papel IAM `discoveryengine.user` do mesmo usuário, se ele existir — as duas coisas são, para o administrador, uma única operação de "tirar o acesso desse usuário". O acoplamento é unidirecional: revogar o papel IAM diretamente pela tela de IAM não remove a Licença.
+_Avoid_: Remover usuário (ambíguo sobre o que exatamente é removido — a Licença, o papel IAM, ou ambos)
+
 ### Provisionamento de Identidade (Entra → Cloud Identity)
 
 **Identidade Sincronizada**:

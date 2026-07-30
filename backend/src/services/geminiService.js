@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { getAccessToken } = require('./gcpAuth');
+const iamService = require('./iamService');
 
 const BASE = `https://discoveryengine.googleapis.com/v1/projects/${process.env.GCP_PROJECT_ID}/locations/global`;
 
@@ -29,12 +30,27 @@ async function assignLicense(email, licenseConfigName) {
 }
 
 async function removeLicense(email) {
+  const normalized = email.trim().toLowerCase();
+
+  try {
+    await iamService.removeUser(normalized);
+  } catch (err) {
+    if (err.status === 404) {
+      console.log(`[gemini] usuário ${normalized} não tinha papel IAM para revogar`);
+    } else {
+      const wrapped = new Error('Falha ao revogar acesso IAM; licença não foi removida.');
+      wrapped.status = 502;
+      throw wrapped;
+    }
+  }
+
   const res = await client.post('/userStores/default_user_store:batchUpdateUserLicenses', {
     inlineSource: {
-      userLicenses: [{ userPrincipal: email, licenseConfig: '' }],
+      userLicenses: [{ userPrincipal: normalized, licenseConfig: '' }],
     },
     deleteUnassignedUserLicenses: true,
   });
+  console.log(`[gemini] licença e acesso IAM removidos para ${normalized}`);
   return res.data;
 }
 
