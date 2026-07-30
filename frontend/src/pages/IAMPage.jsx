@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Table, Button, Modal, Form, Input, Popconfirm,
+  Table, Button, Modal, Form, Input, Checkbox, Popconfirm,
   Typography, Space, Tag, message, Tooltip, Badge,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, ReloadOutlined, KeyOutlined, SearchOutlined } from '@ant-design/icons';
-import { listIAMUsers, addIAMUser, removeIAMUser } from '../api/iam';
+import { listIAMUsers, addIAMUser, removeIAMUser, addCodeAssist, removeCodeAssist } from '../api/iam';
 import { usePollingFetch } from '../hooks/usePollingFetch';
 
 const { Title, Text } = Typography;
@@ -27,11 +27,14 @@ export default function IAMPage() {
 
   const handleAdd = async () => {
     try {
-      const { email } = await form.validateFields();
+      const { email, codeAssist } = await form.validateFields();
       setSubmitting(true);
       const normalizedEmail = email.trim().toLowerCase();
-      await addIAMUser(normalizedEmail);
+      const result = await addIAMUser(normalizedEmail, !!codeAssist);
       message.success(`${normalizedEmail} adicionado com sucesso`);
+      if (codeAssist && result.codeAssist?.granted === false) {
+        message.warning(`Falha ao conceder Code Assist para ${normalizedEmail}: ${result.codeAssist.error}`);
+      }
       form.resetFields();
       setModalOpen(false);
       reload();
@@ -168,6 +171,9 @@ export default function IAMPage() {
             ]}
           >
             <Input placeholder="usuario@edglobo.com.br" autoFocus />
+          </Form.Item>
+          <Form.Item name="codeAssist" valuePropName="checked" initialValue={false}>
+            <Checkbox>Adicionar também ao Code Assist</Checkbox>
           </Form.Item>
         </Form>
       </Modal>
