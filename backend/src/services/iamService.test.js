@@ -177,6 +177,47 @@ describe('addUser', () => {
     expect(err.status).toBe(500);
     expect(setPolicy).not.toHaveBeenCalled();
   });
+
+  test('não concede Code Assist quando a opção não é passada', async () => {
+    getPolicy.mockResolvedValue({ bindings: [] });
+    const result = await addUser('novo@exemplo.com');
+    expect(result.codeAssist).toBeUndefined();
+    expect(setPolicy).toHaveBeenCalledTimes(1);
+  });
+
+  test('concede Code Assist quando codeAssist=true e retorna granted:true', async () => {
+    // 1ª chamada: addUser busca a policy antes de conceder discoveryengine.user (ainda sem o binding).
+    // 2ª chamada: addCodeAssistUser busca a policy de novo, já refletindo o discoveryengine.user recém-concedido
+    // (setPolicy já foi aplicado nesse ponto) — é essa 2ª policy que satisfaz a checagem de pré-requisito.
+    getPolicy
+      .mockResolvedValueOnce({ bindings: [] })
+      .mockResolvedValueOnce({ bindings: [{ role: ROLE, members: [`${PREFIX}novo@exemplo.com`] }] });
+
+    const result = await addUser('novo@exemplo.com', { codeAssist: true });
+
+    expect(result.codeAssist).toEqual({ granted: true });
+    expect(setPolicy).toHaveBeenCalledTimes(2);
+    const codeAssistPolicy = setPolicy.mock.calls[1][0];
+    expect(codeAssistPolicy.bindings).toContainEqual({
+      role: CODE_ASSIST_ROLE,
+      members: [`${CODE_ASSIST_PREFIX}novo@exemplo.com`],
+    });
+  });
+
+  test('mantém discoveryengine.user concedido mesmo se a concessão do Code Assist falhar', async () => {
+    getPolicy
+      .mockResolvedValueOnce({ bindings: [] })
+      .mockResolvedValueOnce({ bindings: [{ role: ROLE, members: [`${PREFIX}novo@exemplo.com`] }] });
+    setPolicy
+      .mockResolvedValueOnce({}) // grant discoveryengine.user
+      .mockRejectedValueOnce(new Error('falha de rede')); // grant Code Assist
+
+    const result = await addUser('novo@exemplo.com', { codeAssist: true });
+
+    expect(result.email).toBe('novo@exemplo.com');
+    expect(result.codeAssist).toEqual({ granted: false, error: 'falha de rede' });
+    expect(setPolicy).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('removeUser', () => {

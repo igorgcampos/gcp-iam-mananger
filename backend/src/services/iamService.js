@@ -27,7 +27,7 @@ async function listUsers() {
     });
 }
 
-async function addUser(email) {
+async function addUser(email, { codeAssist = false } = {}) {
   const policy = await getPolicy();
   const principal = `${WORKFORCE_PREFIX}${email}`;
   policy.bindings ??= [];
@@ -50,7 +50,18 @@ async function addUser(email) {
   }
 
   await setPolicy(cleanPolicy);
-  return { email, principal };
+  const result = { email, principal };
+
+  if (codeAssist) {
+    try {
+      await addCodeAssistUser(email);
+      result.codeAssist = { granted: true };
+    } catch (err) {
+      result.codeAssist = { granted: false, error: err.message };
+    }
+  }
+
+  return result;
 }
 
 async function removeUser(email) {
