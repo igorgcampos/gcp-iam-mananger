@@ -18,6 +18,7 @@ export default function IAMPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
+  const [codeAssistLoading, setCodeAssistLoading] = useState(() => new Set());
   const [form] = Form.useForm();
 
   const { loading, lastUpdated, reload } = usePollingFetch(
@@ -56,6 +57,40 @@ export default function IAMPage() {
     }
   };
 
+  const handleGrantCodeAssist = async (email) => {
+    setCodeAssistLoading((prev) => new Set(prev).add(email));
+    try {
+      await addCodeAssist(email);
+      message.success(`Code Assist concedido a ${email}`);
+      reload();
+    } catch (err) {
+      message.error(`Code Assist: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setCodeAssistLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(email);
+        return next;
+      });
+    }
+  };
+
+  const handleRevokeCodeAssist = async (email) => {
+    setCodeAssistLoading((prev) => new Set(prev).add(email));
+    try {
+      await removeCodeAssist(email);
+      message.success(`Code Assist revogado de ${email}`);
+      reload();
+    } catch (err) {
+      message.error(`Code Assist: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setCodeAssistLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(email);
+        return next;
+      });
+    }
+  };
+
   const filteredUsers = useMemo(
     () => users.filter((u) => (u.email || '').toLowerCase().includes(search.toLowerCase())),
     [users, search]
@@ -88,6 +123,40 @@ export default function IAMPage() {
       render: () => <Tag color="blue">discoveryengine.user</Tag>,
     },
     {
+      title: 'Code Assist',
+      key: 'codeAssist',
+      width: 160,
+      align: 'center',
+      render: (_, record) =>
+        record.codeAssist ? (
+          <Popconfirm
+            title={`Revogar Code Assist de ${record.email}?`}
+            onConfirm={() => handleRevokeCodeAssist(record.email)}
+            okText="Revogar"
+            cancelText="Cancelar"
+            okButtonProps={{ danger: true, loading: codeAssistLoading.has(record.email) }}
+          >
+            <Button
+              size="small"
+              type="text"
+              style={{ color: '#389e0d' }}
+              loading={codeAssistLoading.has(record.email)}
+            >
+              Code Assist
+            </Button>
+          </Popconfirm>
+        ) : (
+          <Button
+            size="small"
+            type="link"
+            loading={codeAssistLoading.has(record.email)}
+            onClick={() => handleGrantCodeAssist(record.email)}
+          >
+            Conceder
+          </Button>
+        ),
+    },
+    {
       title: 'Ações',
       key: 'actions',
       width: 110,
@@ -95,7 +164,11 @@ export default function IAMPage() {
       render: (_, record) => (
         <Popconfirm
           title={`Remover ${record.email}?`}
-          description="A role será revogada no IAM do projeto."
+          description={
+            record.codeAssist
+              ? 'discoveryengine.user e Code Assist serão revogados no IAM do projeto.'
+              : 'A role será revogada no IAM do projeto.'
+          }
           onConfirm={() => handleRemove(record.email)}
           okText="Remover"
           cancelText="Cancelar"
