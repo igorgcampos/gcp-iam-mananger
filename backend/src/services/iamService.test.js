@@ -52,9 +52,30 @@ describe('listUsers', () => {
     );
     const users = await listUsers();
     expect(users).toEqual([
-      { email: 'a@exemplo.com', principal: `${PREFIX}a@exemplo.com` },
-      { email: 'b@exemplo.com', principal: `${PREFIX}b@exemplo.com` },
+      { email: 'a@exemplo.com', principal: `${PREFIX}a@exemplo.com`, codeAssist: false },
+      { email: 'b@exemplo.com', principal: `${PREFIX}b@exemplo.com`, codeAssist: false },
     ]);
+  });
+
+  test('marca codeAssist true para quem também tem o binding do Code Assist', async () => {
+    getPolicy.mockResolvedValue({
+      etag: 'abc123',
+      bindings: [
+        { role: ROLE, members: [`${PREFIX}a@exemplo.com`, `${PREFIX}b@exemplo.com`] },
+        { role: CODE_ASSIST_ROLE, members: [`${CODE_ASSIST_PREFIX}a@exemplo.com`] },
+      ],
+    });
+    const users = await listUsers();
+    expect(users).toEqual([
+      { email: 'a@exemplo.com', principal: `${PREFIX}a@exemplo.com`, codeAssist: true },
+      { email: 'b@exemplo.com', principal: `${PREFIX}b@exemplo.com`, codeAssist: false },
+    ]);
+  });
+
+  test('não quebra quando não há binding nenhum de Code Assist na policy', async () => {
+    getPolicy.mockResolvedValue(makePolicy([`${PREFIX}a@exemplo.com`]));
+    const users = await listUsers();
+    expect(users[0].codeAssist).toBe(false);
   });
 
   test('ignora membros que não começam com "principal://"', async () => {

@@ -12,12 +12,19 @@ async function listUsers() {
   const binding = (policy.bindings || []).find((b) => b.role === ROLE);
   if (!binding) return [];
 
+  const codeAssistBinding = (policy.bindings || []).find((b) => b.role === CODE_ASSIST_ROLE);
+  const codeAssistEmails = new Set(
+    (codeAssistBinding?.members || [])
+      .filter((m) => m.startsWith(CODE_ASSIST_MEMBER_PREFIX))
+      .map((m) => m.slice(CODE_ASSIST_MEMBER_PREFIX.length))
+  );
+
   return (binding.members || [])
     .filter((m) => m.startsWith('principal://'))
-    .map((m) => ({
-      email: m.split('/').pop(),
-      principal: m,
-    }));
+    .map((m) => {
+      const email = m.split('/').pop();
+      return { email, principal: m, codeAssist: codeAssistEmails.has(email) };
+    });
 }
 
 async function addUser(email) {
