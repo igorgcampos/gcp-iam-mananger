@@ -1,6 +1,6 @@
 # GCP IAM Manager
 
-Painel web que permite administrar, sem usar o console do GCP diretamente, quem tem acesso ao Agentspace (via papel IAM) e quem possui licença Gemini Enterprise.
+Painel web que permite administrar, sem usar o console do GCP diretamente, quem tem acesso ao Agentspace (via papel IAM, incluindo Papéis Complementares como o Code Assist) e quem possui licença Gemini Enterprise.
 
 ## Language
 
@@ -35,9 +35,17 @@ _Avoid_: Remover usuário (ambíguo sobre o que exatamente é removido — a Lic
 ### Provisionamento de Identidade (Entra → Cloud Identity)
 
 **Identidade Sincronizada**:
-Um objeto de usuário provisionado no diretório do Cloud Identity/Workspace da organização, originado do Entra ID (AD) por um conector de provisionamento administrado pelo time de AD. É pré-requisito para que um email seja resolvível como principal no IAM do GCP — sem ela, o binding do Workforce Pool é criado mas nunca concede acesso de fato.
+Um objeto de usuário provisionado no diretório do Cloud Identity/Workspace da organização, originado do Entra ID (AD) por um conector de provisionamento administrado pelo time de AD. É pré-requisito para que um email seja resolvível como principal no IAM do GCP, seja como principal do Workforce Pool (`principal://...`) ou como membro direto do Cloud Identity (`user:<email>`) — sem ela, o binding é criado mas nunca concede acesso de fato.
 _Avoid_: Usuário sincronizado (é o objeto no diretório, não a pessoa), conta do AD, usuário do Entra
 
 **Validação de Principal**:
-A checagem que confirma se um email já possui Identidade Sincronizada, feita antes de conceder a role `discoveryengine.user`. Se válida, a concessão prossegue; se inválida, a concessão é bloqueada e o email precisa ser encaminhado ao time de AD para ser incluído no grupo de sincronização.
+A checagem que confirma se um email já possui Identidade Sincronizada, feita antes de conceder qualquer Papel Complementar. Se válida, a concessão prossegue; se inválida, a concessão é bloqueada e o email precisa ser encaminhado ao time de AD para ser incluído no grupo de sincronização.
 _Avoid_: Validar email (é o principal que é validado, não o formato do email)
+
+**Papel Complementar**:
+Um papel IAM gerenciável na tela "IAM — Discovery Engine User" além do `discoveryengine.user`, concedido por opção do administrador a um usuário que já tem `discoveryengine.user`. Hoje existe um: **Code Assist**. Um Papel Complementar nunca existe isolado — revogar `discoveryengine.user` de um usuário revoga também todos os seus Papéis Complementares.
+_Avoid_: Role adicional, permissão extra
+
+**Code Assist**:
+O único Papel Complementar existente hoje: uma role IAM customizada (`projects/agentspace-469418/roles/CustomRole`) com permissões específicas de assistência de código. Ao contrário do `discoveryengine.user` — concedido via principal do Workforce Pool — o Code Assist é concedido via membro direto do Cloud Identity (`user:<email>`).
+_Avoid_: Code assist role, custom role (ambíguo — a Validação de Principal usa outra role customizada, descartável, só para teste de existência)
