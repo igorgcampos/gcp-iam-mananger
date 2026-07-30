@@ -65,6 +65,16 @@ async function addUser(email, { codeAssist = false } = {}) {
 }
 
 async function removeUser(email) {
+  try {
+    await removeCodeAssistUser(email);
+  } catch (err) {
+    if (err.status !== 404) {
+      const wrapped = new Error('Falha ao revogar Code Assist; discoveryengine.user não foi removido.');
+      wrapped.status = 502;
+      throw wrapped;
+    }
+  }
+
   const policy = await getPolicy();
   const principal = `${WORKFORCE_PREFIX}${email}`;
   policy.bindings ??= [];

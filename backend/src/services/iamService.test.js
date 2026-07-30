@@ -245,6 +245,50 @@ describe('removeUser', () => {
     expect(err.status).toBe(404);
     expect(setPolicy).not.toHaveBeenCalled();
   });
+
+  test('revoga Code Assist antes de revogar discoveryengine.user quando o usuário tem os dois', async () => {
+    const combinedPolicy = () => ({
+      etag: 'abc123',
+      bindings: [
+        { role: ROLE, members: [`${PREFIX}a@exemplo.com`] },
+        { role: CODE_ASSIST_ROLE, members: [`${CODE_ASSIST_PREFIX}a@exemplo.com`] },
+      ],
+    });
+    getPolicy.mockResolvedValueOnce(combinedPolicy()).mockResolvedValueOnce(combinedPolicy());
+
+    await removeUser('a@exemplo.com');
+
+    expect(setPolicy).toHaveBeenCalledTimes(2);
+    const codeAssistPolicy = setPolicy.mock.calls[0][0];
+    const codeAssistBinding = codeAssistPolicy.bindings.find((b) => b.role === CODE_ASSIST_ROLE);
+    expect(codeAssistBinding.members).not.toContain(`${CODE_ASSIST_PREFIX}a@exemplo.com`);
+
+    const mainPolicy = setPolicy.mock.calls[1][0];
+    const mainBinding = mainPolicy.bindings.find((b) => b.role === ROLE);
+    expect(mainBinding.members).not.toContain(`${PREFIX}a@exemplo.com`);
+  });
+
+  test('remove discoveryengine.user normalmente quando o usuário não tem Code Assist (404 é ignorado)', async () => {
+    getPolicy.mockResolvedValue(makePolicy([`${PREFIX}a@exemplo.com`]));
+    await removeUser('a@exemplo.com');
+    expect(setPolicy).toHaveBeenCalledTimes(1);
+  });
+
+  test('bloqueia a remoção quando a revogação do Code Assist falha por um erro real', async () => {
+    getPolicy.mockResolvedValue({
+      etag: 'abc123',
+      bindings: [
+        { role: ROLE, members: [`${PREFIX}a@exemplo.com`] },
+        { role: CODE_ASSIST_ROLE, members: [`${CODE_ASSIST_PREFIX}a@exemplo.com`] },
+      ],
+    });
+    setPolicy.mockRejectedValueOnce(new Error('falha de rede'));
+
+    const err = await removeUser('a@exemplo.com').catch((e) => e);
+
+    expect(err.status).toBe(502);
+    expect(setPolicy).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('addCodeAssistUser', () => {
