@@ -7,18 +7,27 @@ jest.mock('./principalProbe', () => ({
   validateAndCleanup: jest.fn(),
 }));
 
-const { listUsers, addUser, removeUser } = require('./iamService');
+const { listUsers, addUser, removeUser, addCodeAssistUser, removeCodeAssistUser } = require('./iamService');
 const { getPolicy, setPolicy } = require('./iamPolicyStore');
 const { validateAndCleanup } = require('./principalProbe');
 
 const ROLE = 'roles/discoveryengine.user';
 const PREFIX = 'principal://iam.googleapis.com/locations/global/workforcePools/entra-workforce/subject/';
+const CODE_ASSIST_ROLE = `projects/${process.env.GCP_PROJECT_ID}/roles/CustomRole`;
+const CODE_ASSIST_PREFIX = 'user:';
 
 function makePolicy(members = []) {
   return {
     etag: 'abc123',
     bindings: members.length ? [{ role: ROLE, members }] : [],
   };
+}
+
+function makeCodeAssistPolicy(codeAssistMembers = [], mainRoleMembers = []) {
+  const bindings = [];
+  if (mainRoleMembers.length) bindings.push({ role: ROLE, members: mainRoleMembers });
+  if (codeAssistMembers.length) bindings.push({ role: CODE_ASSIST_ROLE, members: codeAssistMembers });
+  return { etag: 'abc123', bindings };
 }
 
 beforeEach(() => {
@@ -171,6 +180,104 @@ describe('removeUser', () => {
   test('lança 404 quando usuário não está na role', async () => {
     getPolicy.mockResolvedValue(makePolicy([`${PREFIX}outro@exemplo.com`]));
     const err = await removeUser('naoexiste@exemplo.com').catch((e) => e);
+    expect(err.status).toBe(404);
+    expect(setPolicy).not.toHaveBeenCalled();
+  });
+});
+
+describe('addCodeAssistUser', () => {
+  test('adiciona membro ao binding existente', async () => {
+    getPolicy.mockResolvedValue(
+      makeCodeAssistPolicy(
+        [`${CODE_ASSIST_PREFIX}ja@existe.com`],
+        [`${PREFIX}novo@exemplo.com`, `${PREFIX}ja@existe.com`]
+      )
+    );
+    await addCodeAssistUser('novo@exemplo.com');
+    const policy = setPolicy.mock.calls[0][0];
+    const binding = policy.bindings.find((b) => b.role === CODE_ASSIST_ROLE);
+    expect(binding.members).toContain(`${CODE_ASSIST_PREFIX}novo@exemplo.com`);
+  });
+
+  test('cria novo binding quando a role não existe', async () => {
+    getPolicy.mockResolvedValue(makeCodeAssistPolicy([], [`${PREFIX}primeiro@exemplo.com`]));
+    await addCodeAssistUser('primeiro@exemplo.com');
+    const policy = setPolicy.mock.calls[0][0];
+    expect(policy.bindings).toContainEqual({
+      role: CODE_ASSIST_ROLE,
+      members: [`${CODE_ASSIST_PREFIX}primeiro@exemplo.com`],
+    });
+  });
+
+  test('lança 404 quando o usuário não possui discoveryengine.user', async () => {
+    getPolicy.mockResolvedValue({ bindings: [] });
+    const err = await addCodeAssistUser('semrole@exemplo.com').catch((e) => e);
+    expect(err.status).toBe(404);
+    expect(setPolicy).not.toHaveBeenCalled();
+    expect(validateAndCleanup).not.toHaveBeenCalled();
+  });
+
+  test('lança 409 quando usuário já possui a role', async () => {
+    getPolicy.mockResolvedValue(
+      makeCodeAssistPolicy([`${CODE_ASSIST_PREFIX}ja@existe.com`], [`${PREFIX}ja@existe.com`])
+    );
+    const err = await addCodeAssistUser('ja@existe.com').catch((e) => e);
+    expect(err.status).toBe(409);
+    expect(setPolicy).not.toHaveBeenCalled();
+    expect(validateAndCleanup).not.toHaveBeenCalled();
+  });
+
+  test('retorna objeto com email e member', async () => {
+    getPolicy.mockResolvedValue(makeCodeAssistPolicy([], [`${PREFIX}novo@exemplo.com`]));
+    const result = await addCodeAssistUser('novo@exemplo.com');
+    expect(result).toEqual({
+      email: 'novo@exemplo.com',
+      member: `${CODE_ASSIST_PREFIX}novo@exemplo.com`,
+    });
+  });
+
+  test('valida o principal via probe antes de conceder a role', async () => {
+    const policy = makeCodeAssistPolicy([], [`${PREFIX}novo@exemplo.com`]);
+    getPolicy.mockResolvedValue(policy);
+    await addCodeAssistUser('novo@exemplo.com');
+    expect(validateAndCleanup).toHaveBeenCalledWith(policy, 'novo@exemplo.com');
+  });
+
+  test('propaga o erro do probe (422) sem conceder a role', async () => {
+    getPolicy.mockResolvedValue(makeCodeAssistPolicy([], [`${PREFIX}naosincronizado@exemplo.com`]));
+    const notSynced = new Error('Usuário não sincronizado. Solicite ao time de AD.');
+    notSynced.status = 422;
+    validateAndCleanup.mockRejectedValue(notSynced);
+
+    const err = await addCodeAssistUser('naosincronizado@exemplo.com').catch((e) => e);
+
+    expect(err.status).toBe(422);
+    expect(setPolicy).not.toHaveBeenCalled();
+  });
+});
+
+describe('removeCodeAssistUser', () => {
+  test('remove membro do binding existente', async () => {
+    getPolicy.mockResolvedValue(
+      makeCodeAssistPolicy([`${CODE_ASSIST_PREFIX}a@exemplo.com`, `${CODE_ASSIST_PREFIX}b@exemplo.com`])
+    );
+    await removeCodeAssistUser('a@exemplo.com');
+    const policy = setPolicy.mock.calls[0][0];
+    const binding = policy.bindings.find((b) => b.role === CODE_ASSIST_ROLE);
+    expect(binding.members).not.toContain(`${CODE_ASSIST_PREFIX}a@exemplo.com`);
+    expect(binding.members).toContain(`${CODE_ASSIST_PREFIX}b@exemplo.com`);
+  });
+
+  test('lança 404 quando a role não existe na policy', async () => {
+    getPolicy.mockResolvedValue({ bindings: [] });
+    const err = await removeCodeAssistUser('qualquer@exemplo.com').catch((e) => e);
+    expect(err.status).toBe(404);
+    expect(setPolicy).not.toHaveBeenCalled();
+  });
+
+  test('lança 404 quando usuário não está na role', async () => {
+    getPolicy.mockResolvedValue(makeCodeAssistPolicy([`${CODE_ASSIST_PREFIX}outro@exemplo.com`]));
+    const err = await removeCodeAssistUser('naoexiste@exemplo.com').catch((e) => e);
     expect(err.status).toBe(404);
     expect(setPolicy).not.toHaveBeenCalled();
   });
