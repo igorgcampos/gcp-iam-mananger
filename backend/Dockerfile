@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# ---- Build stage: install production dependencies only ----
+# ---- Build stage: instala apenas as dependências de produção ----
 FROM node:20-alpine AS builder
 WORKDIR /app
 
@@ -22,7 +22,7 @@ COPY --chown=nodejs:nodejs src ./src
 
 USER 1001:1001
 
-# Cloud Run injects PORT at runtime; 3001 matches the app's local default (src/index.js)
+# O Cloud Run injeta a variável PORT em runtime; 3001 é o padrão local da app (src/index.js)
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

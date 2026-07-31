@@ -21,6 +21,8 @@ npm run dev
 
 Abra `http://localhost:5173` no navegador.
 
+> Prefere rodar em containers? Veja a seção [Docker](#docker) abaixo.
+
 ---
 
 ## Pré-requisitos
@@ -48,6 +50,65 @@ GCP_PROJECT_ID=agentspace-469418
 GOOGLE_APPLICATION_CREDENTIALS=./credentials.json
 PORT=3001
 ```
+
+---
+
+## Docker
+
+Frontend e backend rodam em containers isolados — um Dockerfile multi-stage para cada um — e sobem juntos localmente via `docker-compose.yml`. As mesmas imagens são portáveis para qualquer plataforma de containers, incluindo o Cloud Run.
+
+### Requisitos
+
+- Docker e Docker Compose instalados.
+- A mesma configuração de credenciais do [Pré-requisitos](#pré-requisitos): `backend/credentials.json` e `backend/.env` já criados.
+
+### Subir tudo com um comando
+
+```bash
+docker compose up --build
+```
+
+- Frontend: `http://localhost:8080`
+- Backend: `http://localhost:3001`
+
+O container do frontend serve os arquivos estáticos do build (Vite) via nginx e faz proxy reverso de `/api/*` para o backend — o browser só fala com a porta 8080, então não é preciso configurar CORS nem apontar URL de API manualmente.
+
+O `docker-compose.yml` reaproveita o `backend/.env` já existente (via `env_file`) e monta `backend/credentials.json` como volume somente-leitura dentro do container — a chave da service account nunca é copiada para dentro da imagem.
+
+Se o frontend precisar de um `VITE_GCP_PROJECT_ID` diferente do padrão, defina-o antes do build:
+
+```bash
+cp .env.example .env   # ajuste VITE_GCP_PROJECT_ID se necessário
+docker compose up --build
+```
+
+Para derrubar os containers:
+
+```bash
+docker compose down
+```
+
+### Buildar/rodar cada serviço separadamente
+
+```bash
+# Backend
+docker build -t gcp-iam-manager-backend ./backend
+docker run -p 3001:3001 --env-file backend/.env \
+  -v $(pwd)/backend/credentials.json:/secrets/credentials.json:ro \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/secrets/credentials.json \
+  gcp-iam-manager-backend
+
+# Frontend
+docker build -t gcp-iam-manager-frontend --build-arg VITE_GCP_PROJECT_ID=agentspace-469418 ./frontend
+docker run -p 8080:8080 -e BACKEND_URL=http://host.docker.internal:3001 gcp-iam-manager-frontend
+```
+
+### Levando para o Cloud Run
+
+Cada imagem já respeita o contrato do Cloud Run (escuta `$PORT`, stateless, roda como usuário não-root):
+
+- **Backend:** não leve `credentials.json` para produção — anexe uma service account diretamente ao serviço Cloud Run e remova `GOOGLE_APPLICATION_CREDENTIALS`; o Application Default Credentials resolve sozinho via metadata server.
+- **Frontend:** ao fazer deploy, defina a env var `BACKEND_URL` do serviço com a URL pública do backend no Cloud Run (ex.: `https://backend-xxxx-uc.a.run.app`) e passe `VITE_GCP_PROJECT_ID` como `--build-arg` no build da imagem.
 
 ---
 
@@ -198,7 +259,11 @@ curl -H "Authorization: Bearer $(gcloud auth print-access-token)" \
 
 ```
 ed-globo/
+├── docker-compose.yml                 Sobe backend + frontend juntos localmente
+├── .env.example                       VITE_GCP_PROJECT_ID usado no build do frontend via compose
 ├── backend/
+│   ├── Dockerfile                    Multi-stage Node/Express, non-root
+│   ├── .dockerignore
 │   ├── src/
 │   │   ├── index.js                  Express server
 │   │   ├── routes/
@@ -213,6 +278,10 @@ ed-globo/
 │   │       └── geminiService.js      Discovery Engine API
 │   └── .env.example
 └── frontend/
+    ├── Dockerfile                     Build Vite → estáticos servidos por nginx non-root
+    ├── .dockerignore
+    ├── nginx/
+    │   └── default.conf.template     SPA fallback + proxy reverso /api → BACKEND_URL
     └── src/
         ├── App.jsx                   Layout sidebar (Ant Design)
         ├── pages/
