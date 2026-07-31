@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Secrets - never bake credentials into the image
+.env
+.env.*
+credentials.json
+*credentials*.json
+*.key.json
+
+# Dependencies (reinstalled in the build stage)
+node_modules/
+
+# Tests - not needed at runtime
+**/*.test.js
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Docs
+README.md
+*.md

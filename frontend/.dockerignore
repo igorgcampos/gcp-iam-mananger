@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Secrets
+.env
+.env.*
+
+# Dependencies (reinstalled in the build stage)
+node_modules/
+
+# Stale local build output (regenerated in the image)
+dist/
+
+# Tests - not needed at runtime
+**/*.test.js
+**/*.test.jsx
+src/test/
+coverage/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Docs
+README.md
+*.md
