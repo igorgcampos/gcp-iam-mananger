@@ -101,8 +101,7 @@ export default function IAMPage() {
       title: 'Email',
       dataIndex: 'email',
       key: 'email',
-      width: 280,
-      render: (v) => <Text strong>{v}</Text>,
+      render: (v) => <Text strong style={{ whiteSpace: 'nowrap' }}>{v}</Text>,
       sorter: (a, b) => a.email.localeCompare(b.email),
     },
     {
@@ -221,6 +220,7 @@ export default function IAMPage() {
           pagination={{ pageSize: 20, showSizeChanger: true }}
           bordered
           size="small"
+          scroll={{ x: 'max-content' }}
           locale={{ emptyText: 'Nenhum usuário com essa role' }}
         />
       </Space>

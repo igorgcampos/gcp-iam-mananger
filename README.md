@@ -57,6 +57,8 @@ PORT=3001
 
 Frontend e backend rodam em containers isolados — um Dockerfile multi-stage para cada um — e sobem juntos localmente via `docker-compose.yml`. As mesmas imagens são portáveis para qualquer plataforma de containers, incluindo o Cloud Run.
 
+> **Fluxo de trabalho recomendado:** use `npm run dev` no dia a dia — hot reload instantâneo (Vite no frontend, nodemon no backend), sem rebuild nenhum a cada alteração. Os containers **não** refletem mudanças de código automaticamente: o frontend é compilado uma única vez dentro da imagem no momento do `docker build`, então uma alteração em `.jsx`, por exemplo só aparece depois de reconstruir. Use o Docker Compose para *validar* que o build final funciona (o mesmo artefato que vai para o Cloud Run), não como loop de desenvolvimento ativo.
+
 ### Requisitos
 
 - Docker e Docker Compose instalados.
@@ -65,7 +67,7 @@ Frontend e backend rodam em containers isolados — um Dockerfile multi-stage pa
 ### Subir tudo com um comando
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
 - Frontend: `http://localhost:8080`
