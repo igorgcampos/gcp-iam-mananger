@@ -1,0 +1,39 @@
+sequenceDiagram
+    autonumber
+    actor Operador
+    participant Frontend as Frontend<br/>(React, via proxy)
+    participant Backend as Backend<br/>(Express + MSAL Node)
+    participant Entra as Microsoft Entra ID
+    participant Graph as Microsoft Graph
+
+    Operador->>Frontend: Clica "Entrar com Microsoft"
+    Frontend->>Backend: GET /auth/login
+    Backend->>Backend: gera state (anti-CSRF)<br/>seta cookie oauth_state
+    Backend-->>Operador: 302 redirect para tela de login da Microsoft
+
+    Operador->>Entra: Login com email da org (usuario@edglobo.com.br)
+    Entra-->>Operador: 302 redirect para /auth/callback?code=...&state=...
+
+    Operador->>Backend: GET /auth/callback (code, state)
+    Backend->>Backend: valida state
+    Backend->>Entra: acquireTokenByCode(code)
+    Entra-->>Backend: id_token (claims: oid, email, name)
+
+    Backend->>Entra: Client Credentials Flow<br/>(client_id + client_secret)
+    Entra-->>Backend: token de aplicação (Graph)
+    Backend->>Graph: POST /users/{oid}/checkMemberGroups<br/>groupIds: [AZURE_ALLOWED_GROUP_ID]
+    Graph-->>Backend: grupos do Operador que batem com o filtro
+
+    alt Operador está no grupo autorizado
+        Backend->>Backend: assina JWT de sessão (~8h)
+        Backend-->>Operador: 302 redirect "/" + Set-Cookie session (httpOnly)
+        Operador->>Frontend: carrega painel
+        Frontend->>Backend: GET /auth/me (cookie session)
+        Backend-->>Frontend: { email, name }
+        Frontend-->>Operador: painel liberado (IAM / Gemini)
+    else Operador não está no grupo
+        Backend-->>Operador: 302 redirect "/?error=access_denied" (sem cookie)
+        Frontend-->>Operador: tela "Acesso negado"
+    end
+
+    Note over Backend,Graph: A checagem de grupo acontece<br/>só aqui, uma vez por login —<br/>nunca a cada requisição de API (ver ADR 0005)

@@ -69,21 +69,47 @@ O painel exige login via **Microsoft Entra ID (Azure AD)** — não existe mais 
 
 Não existem tiers/permissões diferentes entre Operadores: estar no grupo do AD já dá acesso a todas as ações do painel.
 
+### Fluxo de login
+
+![Diagrama do fluxo de login SSO](docs/sso-fluxo-login.svg)
+
+_Fonte editável: [`docs/sso-fluxo-login.mmd`](docs/sso-fluxo-login.mmd) (sintaxe [Mermaid](https://mermaid.js.org/), renderizado com `npx @mermaid-js/mermaid-cli`)._
+
 ### Variáveis de ambiente novas (`backend/.env`)
 
 ```env
-# Vindas do time de AD — ver docs/sso-pedidos-time-ad.md
-AZURE_TENANT_ID=
-AZURE_CLIENT_ID=
-AZURE_CLIENT_SECRET=
-AZURE_ALLOWED_GROUP_ID=
+# --- Autenticação (SSO / Entra ID) ---
+# Valores pedidos ao time de AD — ver docs/sso-pedidos-time-ad.md.
+# NÃO commitar valores reais.
 
-# Geradas/configuradas localmente
-SESSION_JWT_SECRET=   # gere com: openssl rand -hex 32
-FRONTEND_BASE_URL=http://localhost:5173   # em produção: https://gcp-admin.edglobo.com.br
+# Tenant (Directory) ID do Entra ID da EdGlobo.
+AZURE_TENANT_ID=coloque-o-tenant-id-aqui
+
+# Application (client) ID do App Registration criado para este painel.
+AZURE_CLIENT_ID=coloque-o-client-id-aqui
+
+# Client Secret gerado para o App Registration acima.
+AZURE_CLIENT_SECRET=coloque-o-client-secret-aqui
+
+# Object ID do grupo do AD cujos membros têm acesso ao painel.
+AZURE_ALLOWED_GROUP_ID=coloque-o-object-id-do-grupo-aqui
+
+# Segredo usado para assinar o cookie de sessão (JWT HS256) emitido após o
+# login. Gere um valor forte e único por ambiente, por exemplo com:
+#   openssl rand -hex 32
+SESSION_JWT_SECRET=gere-um-segredo-forte-com-openssl-rand--hex-32
+
+# URL base do frontend, para onde o backend redireciona após login/logout/
+# erro de autenticação. Em dev é o Vite dev server; em produção é o domínio
+# público do painel.
+FRONTEND_BASE_URL=http://localhost:5173
 ```
 
+> Esse bloco é idêntico ao que já vem em [`backend/.env.example`](backend/.env.example) — `cp backend/.env.example backend/.env` já traz esses placeholders prontos para você substituir pelos valores reais.
+
 `SESSION_JWT_SECRET` assina o cookie de sessão do painel (JWT HS256) — gere um valor forte e exclusivo por ambiente com `openssl rand -hex 32`, nunca reutilize entre dev e produção.
+
+> **Antes de reiniciar o backend com essa versão:** enquanto essas variáveis não estiverem preenchidas com valores reais, `/auth/login` falha e ninguém consegue logar — e como `requireAuth` protege `/api/iam` e `/api/gemini`, o painel fica inacessível até a configuração estar completa (ver checklist em [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md)).
 
 ### O que pedir ao time de AD
 
