@@ -1,3 +1,8 @@
+jest.mock('../middleware/requireAuth', () => (req, res, next) => {
+  req.operator = { email: 'operador.teste@edglobo.com.br', name: 'Operador Teste', oid: 'oid-teste' };
+  next();
+});
+
 jest.mock('../services/geminiService', () => ({
   listLicenseConfigs: jest.fn(),
   listUserLicenses: jest.fn(),

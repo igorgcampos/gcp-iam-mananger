@@ -20,4 +20,16 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+
+    # SSO (Entra ID): /auth/login, /auth/callback, /auth/logout, /auth/me.
+    # Precisa do mesmo proxy que /api/ — o cookie de sessão só funciona como
+    # same-site se o browser falar sempre com esta origem única.
+    location /auth/ {
+        proxy_pass ${BACKEND_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }
