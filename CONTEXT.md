@@ -32,6 +32,10 @@ _Avoid_: Inactivity threshold (ok em código), corte, cutoff
 A ação administrativa (disponível nas telas "Gemini Enterprise" e "Relatório de Usuários Inativos") que encerra a Atribuição de um usuário. Além de remover a Licença, hoje ela também revoga o papel IAM `discoveryengine.user` do mesmo usuário, se ele existir — as duas coisas são, para o administrador, uma única operação de "tirar o acesso desse usuário". O acoplamento é unidirecional: revogar o papel IAM diretamente pela tela de IAM não remove a Licença.
 _Avoid_: Remover usuário (ambíguo sobre o que exatamente é removido — a Licença, o papel IAM, ou ambos)
 
+**Operador**:
+Quem loga no painel e executa ações administrativas (adicionar/remover Usuário, conceder/revogar Papel Complementar, atribuir/remover Licença), autenticado via SSO (Entra ID) e autorizado por pertencer a um grupo específico do AD (ver [ADR 0005](docs/adr/0005-sso-entra-id-para-acesso-ao-painel.md)). Distinto de **Usuário**: o Operador é quem opera a ferramenta; o Usuário é quem é gerenciado por ela (via IAM/Licenças Gemini). Não há tiers entre Operadores — pertencer ao grupo já concede acesso total.
+_Avoid_: Admin (ambíguo com "Super Admin" do Workspace, que é outro papel, fora do escopo deste painel), usuário administrador
+
 ### Provisionamento de Identidade (Entra → Cloud Identity)
 
 **Identidade Sincronizada**:

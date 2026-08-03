@@ -7,6 +7,7 @@ const {
 } = require('../services/geminiService');
 const validateEmail = require('../middleware/validateEmail');
 const asyncRoute = require('../middleware/asyncRoute');
+const logAudit = require('../services/auditLog');
 
 const router = Router();
 
@@ -23,12 +24,16 @@ router.post('/users', validateEmail, asyncRoute(async (req, res) => {
   if (!licenseConfig) {
     return res.status(400).json({ error: 'Licença obrigatória' });
   }
-  const result = await assignLicense(email.trim().toLowerCase(), licenseConfig);
+  const normalizedEmail = email.trim().toLowerCase();
+  const result = await assignLicense(normalizedEmail, licenseConfig);
+  logAudit(req, 'gemini.assignLicense', normalizedEmail, { licenseConfig });
   res.status(201).json(result);
 }));
 
 router.delete('/users/:email', asyncRoute(async (req, res) => {
-  await removeLicense(decodeURIComponent(req.params.email));
+  const email = decodeURIComponent(req.params.email);
+  await removeLicense(email);
+  logAudit(req, 'gemini.removeLicense', email);
   res.status(204).send();
 }));
 

@@ -1,3 +1,8 @@
+jest.mock('../middleware/requireAuth', () => (req, res, next) => {
+  req.operator = { email: 'operador.teste@edglobo.com.br', name: 'Operador Teste', oid: 'oid-teste' };
+  next();
+});
+
 jest.mock('../services/iamService', () => ({
   listUsers: jest.fn(),
   addUser: jest.fn(),

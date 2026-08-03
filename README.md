@@ -51,6 +51,44 @@ GOOGLE_APPLICATION_CREDENTIALS=./credentials.json
 PORT=3001
 ```
 
+> A partir da introdução do SSO, `backend/.env` também precisa das variáveis descritas em [Autenticação (SSO)](#autenticação-sso) logo abaixo.
+
+---
+
+## Autenticação (SSO)
+
+O painel exige login via **Microsoft Entra ID (Azure AD)** — não existe mais acesso anônimo às rotas `/api/iam` e `/api/gemini`. A decisão de arquitetura completa está no [ADR 0005](docs/adr/0005-sso-entra-id-para-acesso-ao-painel.md); esta seção é só o resumo operacional.
+
+### Como funciona
+
+1. O Operador (ver `CONTEXT.md`) clica em "Entrar com Microsoft" e é redirecionado para o login da Microsoft (`GET /auth/login`).
+2. Depois de autenticar, a Microsoft chama de volta `GET /auth/callback` no backend, que troca o código por tokens e confere — **só neste momento, uma única vez por login** — se o Operador pertence ao grupo do AD autorizado a usar o painel (via Microsoft Graph).
+3. Se pertence: o backend emite sua própria sessão (um cookie `httpOnly` com um JWT válido por ~8h). Se não pertence: nenhuma sessão é criada e a tela mostra "Acesso negado".
+4. As chamadas seguintes às rotas `/api/*` são autenticadas por esse cookie — o backend não consulta a Microsoft de novo a cada requisição.
+5. "Sair" (botão na sidebar) encerra só a sessão local do painel; não desloga o Operador de outras aplicações Microsoft.
+
+Não existem tiers/permissões diferentes entre Operadores: estar no grupo do AD já dá acesso a todas as ações do painel.
+
+### Variáveis de ambiente novas (`backend/.env`)
+
+```env
+# Vindas do time de AD — ver docs/sso-pedidos-time-ad.md
+AZURE_TENANT_ID=
+AZURE_CLIENT_ID=
+AZURE_CLIENT_SECRET=
+AZURE_ALLOWED_GROUP_ID=
+
+# Geradas/configuradas localmente
+SESSION_JWT_SECRET=   # gere com: openssl rand -hex 32
+FRONTEND_BASE_URL=http://localhost:5173   # em produção: https://gcp-admin.edglobo.com.br
+```
+
+`SESSION_JWT_SECRET` assina o cookie de sessão do painel (JWT HS256) — gere um valor forte e exclusivo por ambiente com `openssl rand -hex 32`, nunca reutilize entre dev e produção.
+
+### O que pedir ao time de AD
+
+App Registration, permissão de aplicação no Microsoft Graph (`GroupMember.Read.All` com admin consent), Redirect URIs e o Object ID do grupo de acesso — checklist completo em [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md).
+
 ---
 
 ## Docker
@@ -63,6 +101,7 @@ Frontend e backend rodam em containers isolados — um Dockerfile multi-stage pa
 
 - Docker e Docker Compose instalados.
 - A mesma configuração de credenciais do [Pré-requisitos](#pré-requisitos): `backend/credentials.json` e `backend/.env` já criados.
+- No `backend/.env` usado pelo Compose, ajuste `FRONTEND_BASE_URL=http://localhost:8080` (a porta do container do frontend, não a do Vite dev server).
 
 ### Subir tudo com um comando
 
@@ -249,6 +288,22 @@ curl -H "Authorization: Bearer $(gcloud auth print-access-token)" \
 
 ---
 
+### Login redireciona de volta com erro `AADSTS50011` (redirect URI mismatch)
+
+**Causa:** O backend deriva o `redirect_uri` da própria requisição (`https://<host>/auth/callback`), e esse valor exato precisa estar cadastrado como Redirect URI no App Registration do Entra ID.
+
+**Solução:** Confirme com o time de AD que tanto `http://localhost:3001/auth/callback` (dev) quanto `https://gcp-admin.edglobo.com.br/auth/callback` (produção) estão cadastrados — ver [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md).
+
+---
+
+### `GET /auth/me` sempre retorna 401 mesmo depois de logar
+
+**Causa:** Em dev, o frontend precisa acessar `/auth/*` e `/api/*` pela mesma origem (`http://localhost:5173`, via proxy do Vite) para que o cookie de sessão seja tratado como same-site. Se o frontend chamar `http://localhost:3001` diretamente (sem passar pelo proxy), o cookie não é enviado de volta.
+
+**Solução:** Confirme que `frontend/vite.config.js` tem `server.proxy` configurado para `/api` e `/auth` apontando para `http://localhost:3001`, e que as chamadas do frontend usam caminhos relativos (`/auth/me`, não `http://localhost:3001/auth/me`).
+
+---
+
 ### Usuário adicionado no IAM não aparece na lista
 
 **Causa:** O email precisa ser um subject válido no workforce pool `entra-workforce`. O GCP não valida a existência do subject no momento do `setIamPolicy` — a entry é criada mesmo com email inválido, mas o usuário não consegue autenticar.
@@ -269,27 +324,35 @@ ed-globo/
 │   ├── src/
 │   │   ├── index.js                  Express server
 │   │   ├── routes/
+│   │   │   ├── auth.js               Endpoints GET/POST /auth (login/callback/logout/me — SSO)
 │   │   │   ├── iam.js                Endpoints GET/POST/DELETE /api/iam
 │   │   │   └── gemini.js             Endpoints GET/POST/DELETE /api/gemini
+│   │   ├── middleware/
+│   │   │   └── requireAuth.js        Valida o cookie de sessão nas rotas /api/*
 │   │   └── services/
 │   │       ├── gcpAuth.js            GoogleAuth (service account)
 │   │       ├── gcpClients.js         Clientes googleapis (crm, iam)
 │   │       ├── iamPolicyStore.js     getPolicy / setPolicy (policy v3)
 │   │       ├── principalProbe.js     Probe descartável de validação de principal
 │   │       ├── iamService.js         listUsers / addUser / removeUser
-│   │       └── geminiService.js      Discovery Engine API
+│   │       ├── geminiService.js      Discovery Engine API
+│   │       ├── msalClient.js         ConfidentialClientApplication (Entra ID)
+│   │       ├── graphGroupCheck.js    Checagem de grupo via Microsoft Graph (só no login)
+│   │       ├── sessionToken.js       Assina/valida o JWT de sessão do painel
+│   │       └── auditLog.js           Log estruturado das ações mutáveis (operador/ação/alvo)
 │   └── .env.example
 └── frontend/
     ├── Dockerfile                     Build Vite → estáticos servidos por nginx non-root
     ├── .dockerignore
     ├── nginx/
-    │   └── default.conf.template     SPA fallback + proxy reverso /api → BACKEND_URL
+    │   └── default.conf.template     SPA fallback + proxy reverso /api e /auth → BACKEND_URL
     └── src/
-        ├── App.jsx                   Layout sidebar (Ant Design)
+        ├── App.jsx                   Layout sidebar (Ant Design) + gate de autenticação
         ├── pages/
         │   ├── IAMPage.jsx           Tela IAM com polling + CRUD
         │   └── GeminiPage.jsx        Tela Gemini com subscriptions + CRUD
         └── api/
+            ├── auth.js                Cliente axios para /auth/me e /auth/logout
             ├── iam.js                Cliente axios para /api/iam
             └── gemini.js             Cliente axios para /api/gemini
 ```
