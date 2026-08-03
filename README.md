@@ -62,12 +62,12 @@ O painel exige login via **Microsoft Entra ID (Azure AD)** — não existe mais 
 ### Como funciona
 
 1. O Operador (ver `CONTEXT.md`) clica em "Entrar com Microsoft" e é redirecionado para o login da Microsoft (`GET /auth/login`).
-2. Depois de autenticar, a Microsoft chama de volta `GET /auth/callback` no backend, que troca o código por tokens e confere — **só neste momento, uma única vez por login** — se o Operador pertence ao grupo do AD autorizado a usar o painel (via Microsoft Graph).
+2. Depois de autenticar, a Microsoft chama de volta `GET /auth/callback` no backend, que troca o código por tokens e confere — **só neste momento, uma única vez por login** — se o Operador pertence ao grupo do AD autorizado a usar o painel (`devsecops-gcp-admin`, via Microsoft Graph).
 3. Se pertence: o backend emite sua própria sessão (um cookie `httpOnly` com um JWT válido por ~8h). Se não pertence: nenhuma sessão é criada e a tela mostra "Acesso negado".
 4. As chamadas seguintes às rotas `/api/*` são autenticadas por esse cookie — o backend não consulta a Microsoft de novo a cada requisição.
 5. "Sair" (botão na sidebar) encerra só a sessão local do painel; não desloga o Operador de outras aplicações Microsoft.
 
-Não existem tiers/permissões diferentes entre Operadores: estar no grupo do AD já dá acesso a todas as ações do painel.
+Não existem tiers/permissões diferentes entre Operadores: estar no grupo `devsecops-gcp-admin` do AD já dá acesso a todas as ações do painel.
 
 ### Fluxo de login
 
@@ -92,6 +92,7 @@ AZURE_CLIENT_ID=coloque-o-client-id-aqui
 AZURE_CLIENT_SECRET=coloque-o-client-secret-aqui
 
 # Object ID do grupo do AD cujos membros têm acesso ao painel.
+# Grupo já criado: devsecops-gcp-admin — falta pegar o Object ID com o time de AD.
 AZURE_ALLOWED_GROUP_ID=coloque-o-object-id-do-grupo-aqui
 
 # Segredo usado para assinar o cookie de sessão (JWT HS256) emitido após o
@@ -110,10 +111,6 @@ FRONTEND_BASE_URL=http://localhost:5173
 `SESSION_JWT_SECRET` assina o cookie de sessão do painel (JWT HS256) — gere um valor forte e exclusivo por ambiente com `openssl rand -hex 32`, nunca reutilize entre dev e produção.
 
 > **Antes de reiniciar o backend com essa versão:** enquanto essas variáveis não estiverem preenchidas com valores reais, `/auth/login` falha e ninguém consegue logar — e como `requireAuth` protege `/api/iam` e `/api/gemini`, o painel fica inacessível até a configuração estar completa (ver checklist em [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md)).
-
-### O que pedir ao time de AD
-
-App Registration, permissão de aplicação no Microsoft Graph (`GroupMember.Read.All` com admin consent), Redirect URIs e o Object ID do grupo de acesso — checklist completo em [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md).
 
 ---
 
