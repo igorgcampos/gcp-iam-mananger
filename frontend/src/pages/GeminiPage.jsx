@@ -11,6 +11,7 @@ import { tierName, tierColor, stateTag, renderLicenseTag } from '../utils/licens
 import { formatDate } from '../utils/gemini';
 import { usePollingFetch } from '../hooks/usePollingFetch';
 import InactivityReportModal from '../components/InactivityReportModal';
+import CopyUsersReportButton from '../components/CopyUsersReportButton';
 
 const { Title, Text } = Typography;
 
@@ -185,9 +186,9 @@ export default function GeminiPage() {
             <Title level={4} style={{ margin: 0, whiteSpace: 'nowrap' }}>Gemini Enterprise — Licenças</Title>
             <Badge count={totalAssigned} showZero color="#722ed1" />
           </Space>
-          <Space>
+          <Space wrap style={{ justifyContent: 'flex-end' }}>
             {lastUpdated && (
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 }}>
                 Atualizado: {lastUpdated.toLocaleTimeString('pt-BR')}
               </Text>
             )}
@@ -195,6 +196,7 @@ export default function GeminiPage() {
               Atualizar
             </Button>
             <InactivityReportModal users={users} configs={configs} onRemove={handleRemove} />
+            <CopyUsersReportButton users={users} configs={configs} />
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
               Adicionar usuário
             </Button>
