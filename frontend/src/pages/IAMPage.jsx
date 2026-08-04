@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Table, Button, Modal, Form, Input, Checkbox, Popconfirm,
-  Typography, Space, Tag, message, Tooltip, Badge,
+  Typography, Space, Tag, message, Tooltip, Badge, Empty, theme,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, ReloadOutlined, KeyOutlined, SearchOutlined } from '@ant-design/icons';
 import { listIAMUsers, addIAMUser, removeIAMUser, addCodeAssist, removeCodeAssist } from '../api/iam';
@@ -14,6 +14,7 @@ function onFetchError(err) {
 }
 
 export default function IAMPage() {
+  const { token } = theme.useToken();
   const [users, setUsers] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -187,9 +188,9 @@ export default function IAMPage() {
       <Space direction="vertical" style={{ width: '100%' }} size="large">
         <Space style={{ justifyContent: 'space-between', width: '100%' }}>
           <Space>
-            <KeyOutlined style={{ fontSize: 20, color: '#1677ff' }} />
+            <KeyOutlined style={{ fontSize: 20, color: token.colorPrimary }} />
             <Title level={4} style={{ margin: 0 }}>IAM — Discovery Engine User</Title>
-            <Badge count={users.length} showZero color="#1677ff" />
+            <Badge count={users.length} showZero color={token.colorPrimary} />
           </Space>
           <Space>
             {lastUpdated && (
@@ -223,7 +224,24 @@ export default function IAMPage() {
           pagination={{ pageSize: 20, showSizeChanger: true }}
           bordered
           size="small"
-          locale={{ emptyText: 'Nenhum usuário com essa role' }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  search
+                    ? `Nenhum resultado para "${search}"`
+                    : 'Nenhum usuário com acesso ao Discovery Engine ainda'
+                }
+              >
+                {!search && (
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+                    Adicionar ao IAM
+                  </Button>
+                )}
+              </Empty>
+            ),
+          }}
         />
       </Space>
 

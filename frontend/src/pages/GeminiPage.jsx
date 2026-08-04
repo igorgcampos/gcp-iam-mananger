@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useLayoutEffect } from 'react';
 import {
   Table, Button, Modal, Form, Input, Select, Popconfirm,
-  Typography, Space, Tag, message, Card, Row, Col, Statistic, Divider, Badge,
+  Typography, Space, Tag, message, Card, Row, Col, Statistic, Divider, Badge, Empty,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, ReloadOutlined, RobotOutlined, SearchOutlined,
@@ -205,7 +205,12 @@ export default function GeminiPage() {
           <Row gutter={16} justify="center">
             {configStats.map((c, idx) => (
               <Col key={c.name} xs={24} sm={12} md={CARD_SPAN}>
-                <Card size="small" bordered ref={idx === 0 ? firstCardRef : undefined}>
+                <Card
+                  size="small"
+                  bordered
+                  className="stat-card"
+                  ref={idx === 0 ? firstCardRef : undefined}
+                >
                   <Statistic
                     title={<Tag color={tierColor(c.label)}>{c.label}</Tag>}
                     value={c.assigned}
@@ -247,7 +252,24 @@ export default function GeminiPage() {
           pagination={{ pageSize: 20, showSizeChanger: true }}
           bordered
           size="middle"
-          locale={{ emptyText: 'Nenhum usuário encontrado' }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  search
+                    ? `Nenhum resultado para "${search}"`
+                    : 'Nenhum usuário com licença atribuída ainda'
+                }
+              >
+                {!search && (
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+                    Adicionar usuário
+                  </Button>
+                )}
+              </Empty>
+            ),
+          }}
         />
       </Space>
       </div>

@@ -2,10 +2,11 @@ import React, {
   useCallback, useEffect, useState,
 } from 'react';
 import {
-  Layout, Menu, Typography, theme, Button, Spin, Result, Space, Avatar,
+  Layout, Menu, Typography, theme, Button, Spin, Result, Space, Avatar, Tooltip,
 } from 'antd';
 import {
   KeyOutlined, RobotOutlined, LogoutOutlined, UserOutlined, SafetyCertificateOutlined,
+  LeftOutlined, RightOutlined,
 } from '@ant-design/icons';
 import IAMPage from './pages/IAMPage';
 import GeminiPage from './pages/GeminiPage';
@@ -23,6 +24,8 @@ const CENTERED_SCREEN_STYLE = {
 };
 
 const hasAccessDeniedError = () => new URLSearchParams(window.location.search).get('error') === 'access_denied';
+
+const SIDER_COLLAPSED_KEY = 'gcpAdminSiderCollapsed';
 
 function MicrosoftLogo() {
   return (
@@ -110,6 +113,11 @@ export default function App() {
   // 'loading' | 'login' | 'denied' | 'authenticated'
   const [authState, setAuthState] = useState('loading');
   const [operator, setOperator] = useState(null);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(SIDER_COLLAPSED_KEY) === '1');
+
+  useEffect(() => {
+    localStorage.setItem(SIDER_COLLAPSED_KEY, collapsed ? '1' : '0');
+  }, [collapsed]);
 
   useEffect(() => {
     if (hasAccessDeniedError()) {
@@ -155,16 +163,29 @@ export default function App() {
       <Sider
         theme="dark"
         collapsible
+        collapsed={collapsed}
+        trigger={null}
         width={220}
-        style={{ boxShadow: '2px 0 8px rgba(0,0,0,.15)' }}
+        style={{ boxShadow: '2px 0 8px rgba(0,0,0,.15)', position: 'relative' }}
       >
         <div style={{
           display: 'flex', flexDirection: 'column', height: '100%',
         }}
         >
-          <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid rgba(255,255,255,.1)' }}>
-            <Title level={5} style={{ color: '#fff', margin: 0 }}>GCP Admin</Title>
-            <Text style={{ color: 'rgba(255,255,255,.45)', fontSize: 12 }}>{import.meta.env.VITE_GCP_PROJECT_ID}</Text>
+          <div style={{
+            padding: collapsed ? '20px 0 12px' : '20px 16px 12px',
+            borderBottom: '1px solid rgba(255,255,255,.1)',
+            textAlign: collapsed ? 'center' : 'left',
+          }}
+          >
+            {collapsed ? (
+              <Title level={5} style={{ color: '#fff', margin: 0 }}>GA</Title>
+            ) : (
+              <>
+                <Title level={5} style={{ color: '#fff', margin: 0 }}>GCP Admin</Title>
+                <Text style={{ color: 'rgba(255,255,255,.45)', fontSize: 12 }}>{import.meta.env.VITE_GCP_PROJECT_ID}</Text>
+              </>
+            )}
           </div>
           <Menu
             theme="dark"
@@ -185,29 +206,61 @@ export default function App() {
               },
             ]}
           />
-          <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,.1)' }}>
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              <Space size={8} align="center">
-                <Avatar size="small" icon={<UserOutlined />} />
-                <Text
-                  style={{ color: 'rgba(255,255,255,.85)', fontSize: 12, maxWidth: 140 }}
-                  ellipsis={{ tooltip: operator?.email }}
-                >
-                  {operator?.name || operator?.email}
-                </Text>
+          <div style={{
+            padding: collapsed ? '12px 0' : '12px 16px',
+            borderTop: '1px solid rgba(255,255,255,.1)',
+          }}
+          >
+            {collapsed ? (
+              <Space direction="vertical" size={12} style={{ width: '100%', alignItems: 'center' }}>
+                <Tooltip title={operator?.name || operator?.email} placement="right">
+                  <Avatar size="small" icon={<UserOutlined />} />
+                </Tooltip>
+                <Tooltip title="Sair" placement="right">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<LogoutOutlined />}
+                    onClick={handleLogout}
+                    aria-label="Sair"
+                    style={{ color: 'rgba(255,255,255,.65)' }}
+                  />
+                </Tooltip>
               </Space>
-              <Button
-                type="text"
-                size="small"
-                icon={<LogoutOutlined />}
-                onClick={handleLogout}
-                style={{ color: 'rgba(255,255,255,.65)', paddingLeft: 0 }}
-              >
-                Sair
-              </Button>
-            </Space>
+            ) : (
+              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                <Space size={8} align="center">
+                  <Avatar size="small" icon={<UserOutlined />} />
+                  <Text
+                    style={{ color: 'rgba(255,255,255,.85)', fontSize: 12, maxWidth: 140 }}
+                    ellipsis={{ tooltip: operator?.email }}
+                  >
+                    {operator?.name || operator?.email}
+                  </Text>
+                </Space>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<LogoutOutlined />}
+                  onClick={handleLogout}
+                  style={{ color: 'rgba(255,255,255,.65)', paddingLeft: 0 }}
+                >
+                  Sair
+                </Button>
+              </Space>
+            )}
           </div>
         </div>
+        <button
+          type="button"
+          className="sider-toggle-hit"
+          aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          onClick={() => setCollapsed((prev) => !prev)}
+        >
+          <span className="sider-toggle-visual">
+            {collapsed ? <RightOutlined style={{ fontSize: 10 }} /> : <LeftOutlined style={{ fontSize: 10 }} />}
+          </span>
+        </button>
       </Sider>
       <Layout>
         <Header
@@ -217,6 +270,9 @@ export default function App() {
             borderBottom: `1px solid ${token.colorBorderSecondary}`,
             display: 'flex',
             alignItems: 'center',
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
           }}
         >
           <Title level={5} style={{ margin: 0, color: token.colorTextSecondary }}>
