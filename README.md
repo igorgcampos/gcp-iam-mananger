@@ -319,6 +319,16 @@ curl -H "Authorization: Bearer $(gcloud auth print-access-token)" \
 
 ---
 
+### Login funciona, mas cai em "Acesso negado" mesmo estando no grupo certo
+
+**Causa:** A permissão `GroupMember.Read.All` sozinha **não é suficiente** para o backend checar a membership de outro usuário via `POST /users/{id}/checkMemberGroups` em contexto de aplicação — a Microsoft Graph também exige `User.ReadBasic.All`. Sem ela, a chamada retorna `403 Authorization_RequestDenied: Insufficient privileges`, que o backend trata como "não pertence ao grupo" (mesmo comportamento visual de quem realmente não está no grupo).
+
+**Diagnóstico:** Olhe o console do backend no momento do login — se aparecer um log `sso_checagem_grupo_falhou` (em vez de `sso_login_negado_fora_do_grupo`), a checagem em si falhou, não é uma questão de membership.
+
+**Solução:** Peça ao time de AD para conceder também `User.ReadBasic.All` (permissão de aplicação, com admin consent) no App Registration — ver [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md#3-permissão-de-api-microsoft-graph).
+
+---
+
 ### `GET /auth/me` sempre retorna 401 mesmo depois de logar
 
 **Causa:** Em dev, o frontend precisa acessar `/auth/*` e `/api/*` pela mesma origem (`http://localhost:5173`, via proxy do Vite) para que o cookie de sessão seja tratado como same-site. Se o frontend chamar `http://localhost:3001` diretamente (sem passar pelo proxy), o cookie não é enviado de volta.

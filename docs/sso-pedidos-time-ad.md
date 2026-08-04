@@ -18,8 +18,14 @@ Checklist do que precisa ser pedido/confirmado com o time de AD (Entra ID / Micr
 
 ## 3. Permissão de API (Microsoft Graph)
 
-- Permissão de **aplicação** (não delegada): `GroupMember.Read.All` (ou `Group.Read.All`), com **admin consent concedido** pelo time de AD.
-- Usada pelo backend via Client Credentials Flow para chamar `POST /v1.0/users/{oid}/checkMemberGroups` **apenas no momento do login** (nunca por requisição — ver ADR 0005).
+Duas permissões de **aplicação** (não delegadas), com **admin consent concedido** pelo time de AD:
+
+- `GroupMember.Read.All`
+- `User.ReadBasic.All`
+
+Usadas pelo backend via Client Credentials Flow para chamar `POST /v1.0/users/{oid}/checkMemberGroups` **apenas no momento do login** (nunca por requisição — ver ADR 0005).
+
+> **As duas juntas são obrigatórias, uma não substitui a outra.** Segundo a [documentação oficial da Microsoft Graph](https://learn.microsoft.com/en-us/graph/api/directoryobject-checkmembergroups) para "Group memberships for other users" (o cenário de uma aplicação checando o grupo de um usuário que não é ela mesma), a combinação mínima em contexto de aplicação é `User.ReadBasic.All` **+** `GroupMember.Read.All`. Só `GroupMember.Read.All` é suficiente para ler propriedades de um grupo (`GET /groups/{id}`), mas **não** é suficiente para `checkMemberGroups` de um usuário — isso retorna `403 Authorization_RequestDenied: Insufficient privileges`, mesmo com o `GroupMember.Read.All` corretamente consentido. (Alternativa mais ampla, se preferirem uma permissão só: `Directory.Read.All` sozinha também cobre o cenário, mas é um escopo bem maior do que o necessário.)
 
 ## 4. Redirect URIs
 
