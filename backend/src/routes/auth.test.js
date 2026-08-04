@@ -106,6 +106,19 @@ describe('auth routes', () => {
       const setCookie = res.headers['set-cookie'] || [];
       expect(setCookie.some((c) => c.startsWith('oauth_state='))).toBe(true);
     });
+
+    test('deriva o redirect_uri preservando a porta do Host da requisição', async () => {
+      // Regressão: um proxy (nginx/Vite) que repasse o Host sem a porta faz
+      // o backend gerar um redirect_uri inválido (ex.: sem a porta 8080 do
+      // docker-compose) — ver docs/sso-pedidos-time-ad.md, item 4.
+      mockGetAuthCodeUrl.mockResolvedValue('https://login.microsoftonline.com/tenant-teste/oauth2/v2.0/authorize?...');
+
+      await request(app).get('/auth/login').set('Host', 'localhost:8080');
+
+      expect(mockGetAuthCodeUrl).toHaveBeenCalledWith(expect.objectContaining({
+        redirectUri: 'http://localhost:8080/auth/callback',
+      }));
+    });
   });
 
   describe('GET /auth/callback', () => {

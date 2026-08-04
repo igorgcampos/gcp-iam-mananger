@@ -123,8 +123,7 @@ Frontend e backend rodam em containers isolados — um Dockerfile multi-stage pa
 ### Requisitos
 
 - Docker e Docker Compose instalados.
-- A mesma configuração de credenciais do [Pré-requisitos](#pré-requisitos): `backend/credentials.json` e `backend/.env` já criados.
-- No `backend/.env` usado pelo Compose, ajuste `FRONTEND_BASE_URL=http://localhost:8080` (a porta do container do frontend, não a do Vite dev server).
+- A mesma configuração de credenciais do [Pré-requisitos](#pré-requisitos): `backend/credentials.json` e `backend/.env` já criados. Não é preciso ajustar `FRONTEND_BASE_URL` para o Compose: `docker-compose.yml` já sobrescreve essa variável para `http://localhost:8080` (a porta do container do frontend), independente do valor em `backend/.env` (usado pelo `npm run dev`, com o Vite em `localhost:5173`).
 
 ### Subir tudo com um comando
 

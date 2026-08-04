@@ -32,7 +32,7 @@ Usadas pelo backend via Client Credentials Flow para chamar `POST /v1.0/users/{o
 Cadastrar os três valores abaixo como Redirect URIs válidos do App Registration (tipo "Web"):
 
 - **Produção**: `https://gcp-admin.edglobo.com.br/auth/callback`
-- **Docker Compose**: `http://localhost:8080/auth/callback` (o nginx preserva o `Host` original do browser via `proxy_set_header Host $host`, então o backend vê `localhost:8080`, não `localhost:3001`)
+- **Docker Compose**: `http://localhost:8080/auth/callback` (o nginx preserva o `Host` original do browser via `proxy_set_header Host $http_host`, então o backend vê `localhost:8080`, não `localhost:3001`. Atenção: `$host` — sem o `http_` — descarta a porta do cabeçalho original e faz o backend derivar `http://localhost/auth/callback`, sem porta, causando `ERR_CONNECTION_REFUSED` no callback)
 - **Dev local (Vite)**: `http://localhost:3001/auth/callback` (o proxy do Vite usa `changeOrigin: true`, que reescreve o `Host` para o alvo do proxy — o backend recebe `localhost:3001` mesmo quando o browser está em `localhost:5173`)
 
 > O backend deriva o `redirect_uri` da própria requisição (protocolo + host visto pelo Express), então qualquer domínio adicional em que o painel venha a rodar (ex.: um ambiente de staging) precisa ser adicionado aqui também — e qualquer mudança futura na configuração de proxy (Vite ou nginx) pode alterar qual valor exato precisa estar cadastrado aqui.

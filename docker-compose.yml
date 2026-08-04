@@ -10,6 +10,9 @@ services:
       # Overrides the path from backend/.env to point at the read-only
       # secret mounted below instead of baking the key into the image.
       - GOOGLE_APPLICATION_CREDENTIALS=/secrets/credentials.json
+      # Overrides the Vite dev server URL from backend/.env — under Compose
+      # the frontend is the nginx container on 8080, not localhost:5173.
+      - FRONTEND_BASE_URL=http://localhost:8080
     volumes:
       - ./backend/credentials.json:/secrets/credentials.json:ro
     ports:
