@@ -5,11 +5,12 @@ import {
   Layout, Menu, Typography, theme, Button, Spin, Result, Space, Avatar,
 } from 'antd';
 import {
-  KeyOutlined, RobotOutlined, LogoutOutlined, UserOutlined,
+  KeyOutlined, RobotOutlined, LogoutOutlined, UserOutlined, SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import IAMPage from './pages/IAMPage';
 import GeminiPage from './pages/GeminiPage';
 import { getMe, logout } from './api/auth';
+import './App.css';
 
 const { Sider, Content, Header } = Layout;
 const { Title, Text } = Typography;
@@ -23,21 +24,70 @@ const CENTERED_SCREEN_STYLE = {
 
 const hasAccessDeniedError = () => new URLSearchParams(window.location.search).get('error') === 'access_denied';
 
-function LoginScreen() {
+function MicrosoftLogo() {
   return (
-    <div style={CENTERED_SCREEN_STYLE}>
-      <Result
-        icon={<UserOutlined />}
-        title="GCP Admin"
-        subTitle="Entre com sua conta corporativa (Microsoft) para acessar o painel."
-        extra={(
-          // Navegação real de página inteira — o fluxo de login é um
-          // redirect OIDC, não uma chamada de API via fetch/axios.
-          <Button type="primary" size="large" href="/auth/login">
+    <svg width="18" height="18" viewBox="0 0 21 21" aria-hidden="true" focusable="false">
+      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+    </svg>
+  );
+}
+
+function LoginScreen() {
+  const [signingIn, setSigningIn] = useState(false);
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-card-band">
+          <div className="login-card-badge">
+            <KeyOutlined />
+          </div>
+        </div>
+        <div className="login-card-body">
+          <Title level={4} style={{ marginBottom: 4 }}>GCP Admin</Title>
+          <Text style={{ color: '#64748b', fontSize: 14, display: 'block', marginBottom: 32 }}>
+            EdGlobo — Painel Interno
+          </Text>
+
+          <div className="login-card-intro">
+            <Title level={5} style={{ marginBottom: 8 }}>Bem-vindo</Title>
+            <Text style={{ color: '#64748b', fontSize: 14, lineHeight: 1.6 }}>
+              Entre com sua conta corporativa Microsoft para acessar o painel de gestão de acessos e licenças.
+            </Text>
+          </div>
+
+          {/* Navegação real de página inteira — o fluxo de login é um
+              redirect OIDC, não uma chamada de API via fetch/axios. */}
+          <Button
+            className="ms-signin-btn"
+            size="large"
+            href="/auth/login"
+            loading={signingIn}
+            icon={<MicrosoftLogo />}
+            onClick={() => setSigningIn(true)}
+          >
             Entrar com Microsoft
           </Button>
-        )}
-      />
+
+          <div className="login-feature-list">
+            <div className="login-feature-item">
+              <SafetyCertificateOutlined className="login-feature-icon" />
+              <span>Gerenciamento de acesso IAM — Discovery Engine</span>
+            </div>
+            <div className="login-feature-item">
+              <RobotOutlined className="login-feature-icon" />
+              <span>Gestão de licenças — Gemini Enterprise</span>
+            </div>
+          </div>
+
+          <Text className="login-footer-note">
+            Acesso restrito a colaboradores autorizados via Microsoft Entra ID.
+          </Text>
+        </div>
+      </div>
     </div>
   );
 }
