@@ -101,6 +101,7 @@ export default function IAMPage() {
       title: 'Email',
       dataIndex: 'email',
       key: 'email',
+      width: 260,
       render: (v) => <Text strong style={{ whiteSpace: 'nowrap' }}>{v}</Text>,
       sorter: (a, b) => a.email.localeCompare(b.email),
     },
@@ -108,6 +109,7 @@ export default function IAMPage() {
       title: 'Principal (IAM)',
       dataIndex: 'principal',
       key: 'principal',
+      width: 280,
       ellipsis: true,
       render: (v) => (
         <Tooltip title={v}>
@@ -118,13 +120,14 @@ export default function IAMPage() {
     {
       title: 'Role',
       key: 'role',
-      width: 200,
+      width: 150,
+      align: 'center',
       render: () => <Tag color="blue">discoveryengine.user</Tag>,
     },
     {
       title: 'Code Assist',
       key: 'codeAssist',
-      width: 160,
+      width: 120,
       align: 'center',
       render: (_, record) =>
         record.codeAssist ? (
@@ -220,7 +223,6 @@ export default function IAMPage() {
           pagination={{ pageSize: 20, showSizeChanger: true }}
           bordered
           size="small"
-          scroll={{ x: 'max-content' }}
           locale={{ emptyText: 'Nenhum usuário com essa role' }}
         />
       </Space>
