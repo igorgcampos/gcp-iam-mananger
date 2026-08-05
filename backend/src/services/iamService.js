@@ -7,6 +7,14 @@ const WORKFORCE_PREFIX =
 const CODE_ASSIST_ROLE = `projects/${process.env.GCP_PROJECT_ID}/roles/CustomRole`;
 const CODE_ASSIST_MEMBER_PREFIX = 'user:';
 
+// Comparação case-insensitive: o GCP normaliza membros do Cloud Identity (usados
+// pelo Code Assist) para a capitalização canônica da conta, que pode divergir do
+// e-mail vindo do principal do Workforce Pool (ver CONTEXT.md, entrada "Code Assist").
+function isMemberPresent(members, target) {
+  const targetLower = target.toLowerCase();
+  return (members || []).some((m) => m.toLowerCase() === targetLower);
+}
+
 async function listUsers() {
   const policy = await getPolicy();
   const binding = (policy.bindings || []).find((b) => b.role === ROLE);
@@ -117,7 +125,10 @@ async function addCodeAssistUser(email) {
   policy.bindings ??= [];
   const binding = policy.bindings.find((b) => b.role === CODE_ASSIST_ROLE);
 
-  if (binding && binding.members.includes(member)) {
+  // Comparação case-insensitive: o GCP normaliza o membro do Cloud Identity para a
+  // capitalização canônica da conta, que pode divergir do e-mail vindo do principal
+  // do Workforce Pool (ver nota em CONTEXT.md, entrada "Code Assist").
+  if (binding && isMemberPresent(binding.members, member)) {
     const err = new Error('Usuário já possui essa permissão');
     err.status = 409;
     throw err;
@@ -150,7 +161,10 @@ async function removeCodeAssistUser(email) {
   }
 
   const before = binding.members.length;
-  binding.members = binding.members.filter((m) => m !== member);
+  // Comparação case-insensitive pelo mesmo motivo do addCodeAssistUser: o membro
+  // real no GCP pode estar em uma capitalização diferente da que o app reconstrói
+  // a partir do e-mail do principal do Workforce Pool.
+  binding.members = binding.members.filter((m) => m.toLowerCase() !== member.toLowerCase());
 
   if (binding.members.length === before) {
     const err = new Error('Usuário não encontrado com essa role');
