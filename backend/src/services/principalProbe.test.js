@@ -69,17 +69,22 @@ describe('validateAndCleanup', () => {
   });
 
   test('quando o probe aceita o principal, remove o binding de teste e resolve com a policy limpa', async () => {
-    setPolicy.mockResolvedValue({
-      etag: 'novo-etag',
-      bindings: [
-        { role: ROLE_NAME, members: ['user:valido@exemplo.com'], condition: { title: 'x' } },
-      ],
-    });
+    setPolicy
+      .mockResolvedValueOnce({
+        etag: 'novo-etag',
+        bindings: [
+          { role: ROLE_NAME, members: ['user:valido@exemplo.com'], condition: { title: 'x' } },
+        ],
+      })
+      .mockResolvedValueOnce({ etag: 'etag-pos-limpeza', bindings: [] });
 
     const policy = { etag: 'etag-original', bindings: [] };
     const result = await validateAndCleanup(policy, 'valido@exemplo.com');
 
-    expect(setPolicy).toHaveBeenCalledTimes(1);
+    // 1ª escrita: adiciona o probe e testa o principal. 2ª escrita: persiste a
+    // remoção do probe imediatamente — não fica pendurada esperando o sucesso
+    // da concessão real que o chamador ainda vai fazer por cima do resultado.
+    expect(setPolicy).toHaveBeenCalledTimes(2);
     const probeAttempt = setPolicy.mock.calls[0][0];
     const probeBinding = probeAttempt.bindings.find((b) => b.role === ROLE_NAME);
     expect(probeBinding.members).toEqual(['user:valido@exemplo.com']);
@@ -90,7 +95,54 @@ describe('validateAndCleanup', () => {
     expect(deltaMs).toBeGreaterThan(4 * 60 * 1000);
     expect(deltaMs).toBeLessThanOrEqual(5 * 60 * 1000);
 
-    expect(result.bindings.find((b) => b.role === ROLE_NAME)).toBeUndefined();
+    const cleanupWrite = setPolicy.mock.calls[1][0];
+    expect(cleanupWrite.bindings.find((b) => b.role === ROLE_NAME)).toBeUndefined();
+    expect(result).toEqual({ etag: 'etag-pos-limpeza', bindings: [] });
+  });
+
+  test('limpa também probes órfãos de tentativas anteriores para o mesmo e-mail, não só o recém-criado', async () => {
+    setPolicy
+      .mockResolvedValueOnce({
+        etag: 'novo-etag',
+        bindings: [
+          {
+            role: ROLE_NAME,
+            members: ['user:valido@exemplo.com'],
+            condition: { title: 'x', expression: 'antigo-1' },
+          },
+          {
+            role: ROLE_NAME,
+            members: ['user:valido@exemplo.com'],
+            condition: { title: 'x', expression: 'antigo-2' },
+          },
+          {
+            role: ROLE_NAME,
+            members: ['user:valido@exemplo.com'],
+            condition: { title: 'x', expression: 'recem-criado' },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ etag: 'etag-pos-limpeza', bindings: [] });
+
+    const policy = {
+      etag: 'etag-original',
+      bindings: [
+        {
+          role: ROLE_NAME,
+          members: ['user:valido@exemplo.com'],
+          condition: { title: 'x', expression: 'antigo-1' },
+        },
+        {
+          role: ROLE_NAME,
+          members: ['user:valido@exemplo.com'],
+          condition: { title: 'x', expression: 'antigo-2' },
+        },
+      ],
+    };
+    await validateAndCleanup(policy, 'valido@exemplo.com');
+
+    const cleanupWrite = setPolicy.mock.calls[1][0];
+    expect(cleanupWrite.bindings.filter((b) => b.role === ROLE_NAME)).toHaveLength(0);
   });
 
   test('quando o probe rejeita por "does not exist", lança erro 422 sem escrever nada mais', async () => {
