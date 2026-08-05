@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Card, Statistic, Typography, Space, Button, Tag, Empty, Alert, AutoComplete, Input, Spin,
+  Card, Statistic, Typography, Space, Button, Tag, Empty, Alert, AutoComplete, Input, Spin, Progress,
 } from 'antd';
 import {
   KeyOutlined, ThunderboltOutlined, RobotOutlined, PieChartOutlined,
-  ReloadOutlined, ClockCircleOutlined, SafetyCertificateOutlined, MailOutlined,
-  RightOutlined, SearchOutlined, WarningOutlined,
+  ReloadOutlined, ClockCircleOutlined, SafetyCertificateOutlined,
+  SearchOutlined, WarningOutlined,
 } from '@ant-design/icons';
 import { tierColor } from '../utils/licenseFormatting';
 import { buildInactivityReport } from '../utils/inactivity';
@@ -49,19 +49,6 @@ function StatCard({
 // do limiar padrão do modal (utils/inactivity.js), que o usuário ajusta
 // livremente pelo seletor quando abre o relatório a partir do Gemini Enterprise.
 const DASHBOARD_INACTIVITY_MONTHS = 3;
-
-function QuickLink({ icon, title, subtitle, onClick }) {
-  return (
-    <button type="button" onClick={onClick} className="dashboard-quick-link">
-      <span className="dashboard-quick-link-icon">{icon}</span>
-      <span style={{ flex: 1, textAlign: 'left' }}>
-        <Text strong style={{ display: 'block', fontSize: 13 }}>{title}</Text>
-        <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase', fontWeight: 700 }}>{subtitle}</Text>
-      </span>
-      <RightOutlined style={{ color: '#cbd5e1', fontSize: 12 }} />
-    </button>
-  );
-}
 
 export default function DashboardPage({
   iamUsers, iamLoading, iamLastUpdated, reloadIam,
@@ -259,29 +246,35 @@ export default function DashboardPage({
                 size="small"
                 bordered
                 style={{ borderRadius: 16, height: '100%' }}
-                title={<Text strong>Atalhos</Text>}
+                title={<Text strong>Resumo IAM</Text>}
               >
-                <Space direction="vertical" size={10} style={{ width: '100%' }}>
-                  <QuickLink
-                    icon={<ClockCircleOutlined style={{ color: '#2563eb' }} />}
-                    title="Relatório de inatividade"
-                    subtitle="Otimização de custos"
-                    onClick={handleOpenInactivityReport}
-                  />
-                  <QuickLink
-                    icon={<KeyOutlined style={{ color: '#2563eb' }} />}
-                    title="Gerenciar acessos IAM"
-                    subtitle="Discovery Engine"
-                    onClick={() => onNavigate?.('iam')}
-                  />
-                  <QuickLink
-                    icon={<MailOutlined style={{ color: '#2563eb' }} />}
-                    title="Abrir chamado"
-                    subtitle="Suporte AD / GCP"
-                    onClick={() => {
-                      window.location.href = 'mailto:suporte@edglobo.com.br?subject=Suporte GCP Admin';
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <div style={{ padding: '10px 12px', borderRadius: 10, background: '#f8fafc' }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8,
                     }}
-                  />
+                    >
+                      <Tag color="blue" style={{ margin: 0 }}>Code Assist</Tag>
+                      <Text strong style={{ color: '#4f46e5' }}>{codeAssistCount} / {iamUsers.length}</Text>
+                    </div>
+                    <Progress
+                      percent={iamUsers.length ? Math.round((codeAssistCount / iamUsers.length) * 100) : 0}
+                      size="small"
+                      strokeColor="#4f46e5"
+                      showInfo={false}
+                    />
+                    <Text type="secondary" style={{ fontSize: 12, marginTop: 6, display: 'block' }}>
+                      {iamUsers.length - codeAssistCount} usuário{iamUsers.length - codeAssistCount !== 1 ? 's' : ''} sem acesso às ferramentas de IA
+                    </Text>
+                  </div>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 12px', borderRadius: 10, background: '#f8fafc',
+                  }}
+                  >
+                    <Text type="secondary" style={{ fontSize: 12 }}>Total de usuários no Discovery Engine</Text>
+                    <Text strong>{iamUsers.length}</Text>
+                  </div>
                 </Space>
               </Card>
 
