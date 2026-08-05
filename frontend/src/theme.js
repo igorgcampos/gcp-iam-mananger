@@ -1,9 +1,11 @@
-// Token base compartilhado com o gradiente do login (App.css) para manter
-// a mesma identidade visual em toda a aplicação.
+// Token base compartilhado com o design do login e do app shell (App.css)
+// para manter a mesma identidade visual em toda a aplicação: azul-marinho
+// EDGlobo (#192645) como cor de destaque e Manrope como tipografia.
 export const themeConfig = {
   token: {
-    colorPrimary: '#1e3a5f',
-    borderRadius: 8,
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    colorPrimary: '#192645',
+    colorLink: '#192645',
+    borderRadius: 10,
+    fontFamily: "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   },
 };

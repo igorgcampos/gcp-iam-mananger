@@ -1,45 +1,41 @@
-import React, { useState, useMemo, useRef, useLayoutEffect } from 'react';
+import React, {
+  useState, useMemo, useRef, useLayoutEffect, useEffect,
+} from 'react';
 import {
   Table, Button, Modal, Form, Input, Select, Popconfirm,
   Typography, Space, Tag, message, Card, Row, Col, Statistic, Divider, Badge, Empty,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, ReloadOutlined, RobotOutlined, SearchOutlined,
+  UserAddOutlined, MailOutlined, AppstoreOutlined, InfoCircleOutlined,
 } from '@ant-design/icons';
-import { listLicenseConfigs, listGeminiUsers, addGeminiUser, removeGeminiUser } from '../api/gemini';
+import { addGeminiUser, removeGeminiUser } from '../api/gemini';
 import { tierName, tierColor, stateTag, renderLicenseTag } from '../utils/licenseFormatting';
 import { formatDate } from '../utils/gemini';
-import { usePollingFetch } from '../hooks/usePollingFetch';
 import InactivityReportModal from '../components/InactivityReportModal';
 import CopyUsersReportButton from '../components/CopyUsersReportButton';
 
 const { Title, Text } = Typography;
 
-function onFetchError(err) {
-  message.error(err.response?.data?.error || err.message);
-}
-
 const CARD_SPAN = 8; // matches Col md={8} below
 
-export default function GeminiPage() {
+export default function GeminiPage({
+  users, configs, loading, lastUpdated, reload, initialSearch = '', openInactivityReport = null,
+}) {
   const contentRef = useRef(null);
   const firstCardRef = useRef(null);
   const [titleOffsetPx, setTitleOffsetPx] = useState(0);
-  const [users, setUsers] = useState([]);
-  const [configs, setConfigs] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [form] = Form.useForm();
 
-  const { loading, lastUpdated, reload } = usePollingFetch(
-    async () => {
-      const [u, c] = await Promise.all([listGeminiUsers(), listLicenseConfigs()]);
-      setUsers(u);
-      setConfigs(c);
-    },
-    { onError: onFetchError }
-  );
+  // A página fica sempre montada (só escondida via CSS ao trocar de aba),
+  // então precisamos reagir a mudanças de initialSearch, não só usá-lo como
+  // valor inicial do useState.
+  useEffect(() => {
+    if (initialSearch) setSearch(initialSearch);
+  }, [initialSearch]);
 
   const assignedByConfig = useMemo(() => {
     const map = {};
@@ -195,7 +191,13 @@ export default function GeminiPage() {
             <Button icon={<ReloadOutlined />} onClick={() => reload()} loading={loading}>
               Atualizar
             </Button>
-            <InactivityReportModal users={users} configs={configs} onRemove={handleRemove} />
+            <InactivityReportModal
+              users={users}
+              configs={configs}
+              onRemove={handleRemove}
+              initialOpen={!!openInactivityReport}
+              initialThreshold={openInactivityReport?.thresholdMonths}
+            />
             <CopyUsersReportButton users={users} configs={configs} />
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
               Adicionar usuário
@@ -277,31 +279,39 @@ export default function GeminiPage() {
       </div>
 
       <Modal
-        title="Adicionar usuário ao Gemini Enterprise"
+        title={(
+          <Space size={10}>
+            <span className="modal-icon-badge modal-icon-badge-blue"><UserAddOutlined /></span>
+            Adicionar usuário ao Gemini Enterprise
+          </Space>
+        )}
         open={modalOpen}
         onOk={handleAdd}
         onCancel={() => { setModalOpen(false); form.resetFields(); }}
         confirmLoading={submitting}
         okText="Adicionar"
         cancelText="Cancelar"
+        okButtonProps={{ size: 'large' }}
+        cancelButtonProps={{ size: 'large' }}
+        styles={{ content: { borderRadius: 20 } }}
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 20 }} requiredMark={false}>
           <Form.Item
-            label="Email"
+            label={<Text strong style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '.04em' }}>Endereço de email</Text>}
             name="email"
             rules={[
               { required: true, message: 'Informe o email' },
               { type: 'email', message: 'Email inválido' },
             ]}
           >
-            <Input placeholder="usuario@edglobo.com.br" autoFocus />
+            <Input size="large" prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder="usuario@edglobo.com.br" autoFocus />
           </Form.Item>
           <Form.Item
-            label="Licença"
+            label={<Text strong style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '.04em' }}>Nível da licença</Text>}
             name="licenseConfig"
             rules={[{ required: true, message: 'Selecione uma licença' }]}
           >
-            <Select placeholder="Selecione a licença">
+            <Select size="large" prefix={<AppstoreOutlined style={{ color: '#94a3b8' }} />} placeholder="Selecione o plano...">
               {configStats.map((c) => (
                 <Select.Option key={c.name} value={c.name} disabled={c.remaining === 0}>
                   {c.label} — {c.remaining} slot{c.remaining !== 1 ? 's' : ''} disponível{c.remaining !== 1 ? 'eis' : ''}
@@ -310,6 +320,12 @@ export default function GeminiPage() {
             </Select>
           </Form.Item>
         </Form>
+        <div className="modal-info-banner">
+          <InfoCircleOutlined style={{ marginTop: 2 }} />
+          <span>
+            O usuário receberá acesso imediato ao Gemini Enterprise assim que a licença for atribuída no IAM do projeto.
+          </span>
+        </div>
       </Modal>
     </div>
   );

@@ -169,6 +169,12 @@
       "skillPath": "skills/in-progress/setup-ts-deep-modules/SKILL.md",
       "computedHash": "bd5cbaa455454c2d6c27a1b734e0d820606da6c482bf3c79ec55fbc3f3e03ef3"
     },
+    "superdesign": {
+      "source": "superdesigndev/superdesign-skill",
+      "sourceType": "github",
+      "skillPath": "skills/superdesign/SKILL.md",
+      "computedHash": "7bcd8d356976e049ad9061f585358ca3e140a719335f8954f5c1366e0738c8a8"
+    },
     "tdd": {
       "source": "mattpocock/skills",
       "sourceType": "github",

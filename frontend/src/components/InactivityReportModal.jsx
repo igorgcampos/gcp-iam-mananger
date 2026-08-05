@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Modal, Select, Table, Tag, Typography, Space, Popconfirm, message } from 'antd';
-import { ClockCircleOutlined, CopyOutlined, DeleteOutlined } from '@ant-design/icons';
+import { ClockCircleOutlined, CopyOutlined, DeleteOutlined, WarningOutlined } from '@ant-design/icons';
 import { renderLicenseTag, stateTag } from '../utils/licenseFormatting';
 import {
   DEFAULT_INACTIVITY_MONTHS,
@@ -13,9 +13,22 @@ import {
 
 const { Text } = Typography;
 
-export default function InactivityReportModal({ users, configs, onRemove }) {
-  const [open, setOpen] = useState(false);
-  const [thresholdMonths, setThresholdMonths] = useState(DEFAULT_INACTIVITY_MONTHS);
+export default function InactivityReportModal({
+  users, configs, onRemove, initialOpen = false, initialThreshold,
+}) {
+  const [open, setOpen] = useState(initialOpen);
+  const [thresholdMonths, setThresholdMonths] = useState(initialThreshold ?? DEFAULT_INACTIVITY_MONTHS);
+
+  // GeminiPage agora fica sempre montada (só escondida via CSS ao trocar de
+  // aba), então um pedido vindo do Dashboard (initialOpen/initialThreshold)
+  // só chega como mudança de prop, não como um novo mount — precisa de um
+  // efeito reagindo a ela, e não só do valor inicial do useState acima.
+  useEffect(() => {
+    if (initialOpen) {
+      setOpen(true);
+      if (initialThreshold) setThresholdMonths(initialThreshold);
+    }
+  }, [initialOpen, initialThreshold]);
 
   const assignedTotal = useMemo(
     () => users.filter((u) => u.licenseAssignmentState === 'ASSIGNED').length,
@@ -81,7 +94,7 @@ export default function InactivityReportModal({ users, configs, onRemove }) {
       title: 'Tempo inativo',
       dataIndex: 'monthsInactive',
       key: 'monthsInactive',
-      render: (v) => <Tag color="red">{formatMonthsInactive(v)}</Tag>,
+      render: (v) => <Tag color="red" icon={<WarningOutlined />}>{formatMonthsInactive(v)}</Tag>,
     },
     {
       title: 'Ações',
@@ -109,34 +122,38 @@ export default function InactivityReportModal({ users, configs, onRemove }) {
         Relatório de Inatividade
       </Button>
       <Modal
-        title="Relatório de Usuários Inativos"
+        title={(
+          <Space size={10}>
+            <span className="modal-icon-badge modal-icon-badge-blue"><ClockCircleOutlined /></span>
+            Relatório de Usuários Inativos
+          </Space>
+        )}
         open={open}
         onCancel={() => setOpen(false)}
         footer={null}
         width="90vw"
         style={{ maxWidth: 1200 }}
+        styles={{ content: { borderRadius: 20 } }}
         centered
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Space>
+          <Space wrap>
             <Text>Inativo há mais de</Text>
             <Select
               value={thresholdMonths}
               onChange={setThresholdMonths}
-              style={{ width: 140 }}
+              size="large"
+              style={{ width: 160 }}
               options={INACTIVITY_MONTH_OPTIONS.map((m) => ({
                 value: m,
                 label: `${m} ${m === 1 ? 'mês' : 'meses'}`,
               }))}
             />
-          </Space>
-          <Space>
             <Text type="secondary">
               {report.length} de {assignedTotal} usuários inativos
             </Text>
             <Button
               icon={<CopyOutlined />}
-              size="small"
               onClick={handleCopy}
               disabled={report.length === 0}
             >
