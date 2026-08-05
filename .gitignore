@@ -7,8 +7,9 @@ dist/
 .DS_Store
 .claude/skills/
 .agents/skills/
+.aider-desk/
 .claude/settings.local.json
 # Logs locais
 *.log
 .worktrees/
-.superdesign/tmp/
+.superdesign/

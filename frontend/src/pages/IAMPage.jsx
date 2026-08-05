@@ -1,31 +1,31 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Table, Button, Modal, Form, Input, Checkbox, Popconfirm,
   Typography, Space, Tag, message, Tooltip, Badge, Empty, theme,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, ReloadOutlined, KeyOutlined, SearchOutlined } from '@ant-design/icons';
-import { listIAMUsers, addIAMUser, removeIAMUser, addCodeAssist, removeCodeAssist } from '../api/iam';
-import { usePollingFetch } from '../hooks/usePollingFetch';
+import {
+  PlusOutlined, DeleteOutlined, ReloadOutlined, KeyOutlined, SearchOutlined, UserAddOutlined, MailOutlined,
+} from '@ant-design/icons';
+import { addIAMUser, removeIAMUser, addCodeAssist, removeCodeAssist } from '../api/iam';
 
 const { Title, Text } = Typography;
 
-function onFetchError(err) {
-  message.error(err.response?.data?.error || err.message);
-}
-
-export default function IAMPage() {
+export default function IAMPage({
+  users, loading, lastUpdated, reload, initialSearch = '',
+}) {
   const { token } = theme.useToken();
-  const [users, setUsers] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [codeAssistLoading, setCodeAssistLoading] = useState(() => new Set());
   const [form] = Form.useForm();
 
-  const { loading, lastUpdated, reload } = usePollingFetch(
-    async () => { setUsers(await listIAMUsers()); },
-    { onError: onFetchError }
-  );
+  // A página fica sempre montada (só escondida via CSS ao trocar de aba),
+  // então precisamos reagir a mudanças de initialSearch, não só usá-lo como
+  // valor inicial do useState.
+  useEffect(() => {
+    if (initialSearch) setSearch(initialSearch);
+  }, [initialSearch]);
 
   const handleAdd = async () => {
     try {
@@ -246,27 +246,42 @@ export default function IAMPage() {
       </Space>
 
       <Modal
-        title="Adicionar usuário ao IAM"
+        title={(
+          <Space size={10}>
+            <span className="modal-icon-badge modal-icon-badge-blue"><UserAddOutlined /></span>
+            Adicionar usuário ao IAM
+          </Space>
+        )}
         open={modalOpen}
         onOk={handleAdd}
         onCancel={() => { setModalOpen(false); form.resetFields(); }}
         confirmLoading={submitting}
-        okText="Adicionar"
+        okText="Adicionar usuário"
         cancelText="Cancelar"
+        okButtonProps={{ size: 'large' }}
+        cancelButtonProps={{ size: 'large' }}
+        styles={{ content: { borderRadius: 20 } }}
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 20 }} requiredMark={false}>
           <Form.Item
-            label="Email"
+            label={<Text strong style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '.04em' }}>Email corporativo</Text>}
             name="email"
             rules={[
               { required: true, message: 'Informe o email' },
               { type: 'email', message: 'Email inválido' },
             ]}
           >
-            <Input placeholder="usuario@edglobo.com.br" autoFocus />
+            <Input size="large" prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder="usuario@edglobo.com.br" autoFocus />
           </Form.Item>
-          <Form.Item name="codeAssist" valuePropName="checked" initialValue={false}>
-            <Checkbox>Adicionar também ao Code Assist</Checkbox>
+          <Form.Item name="codeAssist" valuePropName="checked" initialValue={false} style={{ marginBottom: 0 }}>
+            <Checkbox className="modal-checkbox-card">
+              <div>
+                <Text strong style={{ display: 'block', fontSize: 14 }}>Adicionar também ao Code Assist</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Concede acesso às ferramentas de assistência de código de IA.
+                </Text>
+              </div>
+            </Checkbox>
           </Form.Item>
         </Form>
       </Modal>

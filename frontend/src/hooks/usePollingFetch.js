@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-export function usePollingFetch(fetchFn, { interval = 30_000, onError = () => {} } = {}) {
+export function usePollingFetch(fetchFn, { interval = 30_000, onError = () => {}, enabled = true } = {}) {
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const fetchRef = useRef(fetchFn);
@@ -23,10 +23,11 @@ export function usePollingFetch(fetchFn, { interval = 30_000, onError = () => {}
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!enabled) return undefined;
     load();
     const id = setInterval(() => load(true), intervalRef.current);
     return () => clearInterval(id);
-  }, [load]);
+  }, [load, enabled]);
 
   return { loading, lastUpdated, reload: load };
 }
