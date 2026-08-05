@@ -53,3 +53,5 @@ _Avoid_: Role adicional, permissão extra
 **Code Assist**:
 O único Papel Complementar existente hoje: uma role IAM customizada (`projects/agentspace-469418/roles/CustomRole`) com permissões específicas de assistência de código. Ao contrário do `discoveryengine.user` — concedido via principal do Workforce Pool — o Code Assist é concedido via membro direto do Cloud Identity (`user:<email>`).
 _Avoid_: Code assist role, custom role (ambíguo — a Validação de Principal usa outra role customizada, descartável, só para teste de existência)
+
+_Nota de implementação_: o e-mail no principal do Workforce Pool preserva a capitalização enviada pelo Entra ID; o e-mail no membro do Cloud Identity é normalizado pelo GCP para a capitalização canônica da conta. As duas fontes podem divergir em maiúsculas/minúsculas para o mesmo usuário sem que isso signifique falha na concessão — qualquer código que cruze os dois vínculos (como `listUsers`) precisa comparar e-mails de forma case-insensitive.

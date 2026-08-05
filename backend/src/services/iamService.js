@@ -12,18 +12,22 @@ async function listUsers() {
   const binding = (policy.bindings || []).find((b) => b.role === ROLE);
   if (!binding) return [];
 
+  // Comparação sempre case-insensitive: o principal do Workforce Pool preserva a
+  // capitalização enviada pelo Entra ID, enquanto o membro do Cloud Identity (Code
+  // Assist) é normalizado pelo GCP para a capitalização canônica da conta — as duas
+  // fontes podem divergir para o mesmo usuário sem que a concessão tenha falhado.
   const codeAssistBinding = (policy.bindings || []).find((b) => b.role === CODE_ASSIST_ROLE);
   const codeAssistEmails = new Set(
     (codeAssistBinding?.members || [])
       .filter((m) => m.startsWith(CODE_ASSIST_MEMBER_PREFIX))
-      .map((m) => m.slice(CODE_ASSIST_MEMBER_PREFIX.length))
+      .map((m) => m.slice(CODE_ASSIST_MEMBER_PREFIX.length).toLowerCase())
   );
 
   return (binding.members || [])
     .filter((m) => m.startsWith('principal://'))
     .map((m) => {
       const email = m.split('/').pop();
-      return { email, principal: m, codeAssist: codeAssistEmails.has(email) };
+      return { email, principal: m, codeAssist: codeAssistEmails.has(email.toLowerCase()) };
     });
 }
 

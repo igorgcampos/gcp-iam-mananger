@@ -78,6 +78,24 @@ describe('listUsers', () => {
     expect(users[0].codeAssist).toBe(false);
   });
 
+  test('marca codeAssist true mesmo quando a capitalização do e-mail difere entre os dois vínculos', async () => {
+    // O principal do Workforce Pool preserva a capitalização enviada pelo Entra ID,
+    // enquanto o membro do Cloud Identity (Code Assist) é normalizado pelo GCP para
+    // a capitalização canônica da conta — as duas fontes podem divergir para o
+    // mesmo usuário sem que isso signifique que a concessão falhou.
+    getPolicy.mockResolvedValue({
+      etag: 'abc123',
+      bindings: [
+        { role: ROLE, members: [`${PREFIX}Ana.Souza@exemplo.com`] },
+        { role: CODE_ASSIST_ROLE, members: [`${CODE_ASSIST_PREFIX}ana.souza@exemplo.com`] },
+      ],
+    });
+    const users = await listUsers();
+    expect(users).toEqual([
+      { email: 'Ana.Souza@exemplo.com', principal: `${PREFIX}Ana.Souza@exemplo.com`, codeAssist: true },
+    ]);
+  });
+
   test('ignora membros que não começam com "principal://"', async () => {
     getPolicy.mockResolvedValue(
       makePolicy([`${PREFIX}a@exemplo.com`, 'user:outro@exemplo.com'])
