@@ -81,7 +81,14 @@ async function validateAndCleanup(policy, email) {
     throw generic;
   }
 
-  return removeProbeBinding(resultPolicy, email);
+  const cleanedPolicy = removeProbeBinding(resultPolicy, email);
+
+  // Persiste a remoção do probe imediatamente, em vez de deixar essa limpeza
+  // pendurada na policy em memória à espera de que o chamador consiga persistir
+  // a concessão real por cima dela. Se essa escrita seguinte falhar (conflito de
+  // concorrência, erro de rede etc.), o probe já foi removido do GCP mesmo assim
+  // — sem isso, cada tentativa fracassada deixava um binding de probe órfão.
+  return setPolicy(cleanedPolicy);
 }
 
 module.exports = { ensureProbeRole, validateAndCleanup, PROBE_ROLE_NAME };

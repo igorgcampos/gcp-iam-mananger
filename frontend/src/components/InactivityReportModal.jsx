@@ -166,7 +166,7 @@ export default function InactivityReportModal({
             rowKey="userPrincipal"
             pagination={{ pageSize: 10 }}
             size="small"
-            scroll={{ x: 'max-content', y: 'calc(100vh - 380px)' }}
+            scroll={{ x: 'max-content' }}
             locale={{ emptyText: 'Nenhum usuário inativo neste período' }}
           />
         </Space>

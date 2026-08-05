@@ -78,6 +78,24 @@ describe('listUsers', () => {
     expect(users[0].codeAssist).toBe(false);
   });
 
+  test('marca codeAssist true mesmo quando a capitalização do e-mail difere entre os dois vínculos', async () => {
+    // O principal do Workforce Pool preserva a capitalização enviada pelo Entra ID,
+    // enquanto o membro do Cloud Identity (Code Assist) é normalizado pelo GCP para
+    // a capitalização canônica da conta — as duas fontes podem divergir para o
+    // mesmo usuário sem que isso signifique que a concessão falhou.
+    getPolicy.mockResolvedValue({
+      etag: 'abc123',
+      bindings: [
+        { role: ROLE, members: [`${PREFIX}Ana.Souza@exemplo.com`] },
+        { role: CODE_ASSIST_ROLE, members: [`${CODE_ASSIST_PREFIX}ana.souza@exemplo.com`] },
+      ],
+    });
+    const users = await listUsers();
+    expect(users).toEqual([
+      { email: 'Ana.Souza@exemplo.com', principal: `${PREFIX}Ana.Souza@exemplo.com`, codeAssist: true },
+    ]);
+  });
+
   test('ignora membros que não começam com "principal://"', async () => {
     getPolicy.mockResolvedValue(
       makePolicy([`${PREFIX}a@exemplo.com`, 'user:outro@exemplo.com'])
@@ -360,6 +378,19 @@ describe('addCodeAssistUser', () => {
     expect(err.status).toBe(422);
     expect(setPolicy).not.toHaveBeenCalled();
   });
+
+  test('lança 409 mesmo quando a capitalização do membro já existente difere do e-mail informado', async () => {
+    // O membro real no GCP está com a capitalização canônica do Cloud Identity
+    // (minúscula), mas o e-mail informado veio do principal do Workforce Pool,
+    // que preserva a capitalização do Entra ID.
+    getPolicy.mockResolvedValue(
+      makeCodeAssistPolicy([`${CODE_ASSIST_PREFIX}ja.existe@exemplo.com`], [`${PREFIX}Ja.Existe@exemplo.com`])
+    );
+    const err = await addCodeAssistUser('Ja.Existe@exemplo.com').catch((e) => e);
+    expect(err.status).toBe(409);
+    expect(setPolicy).not.toHaveBeenCalled();
+    expect(validateAndCleanup).not.toHaveBeenCalled();
+  });
 });
 
 describe('removeCodeAssistUser', () => {
@@ -386,5 +417,18 @@ describe('removeCodeAssistUser', () => {
     const err = await removeCodeAssistUser('naoexiste@exemplo.com').catch((e) => e);
     expect(err.status).toBe(404);
     expect(setPolicy).not.toHaveBeenCalled();
+  });
+
+  test('remove o membro mesmo quando o e-mail informado tem capitalização diferente da armazenada', async () => {
+    // Reproduz o bug real: o membro no GCP está salvo em minúsculas (capitalização
+    // canônica do Cloud Identity), mas o e-mail vindo do principal do Workforce
+    // Pool preserva a capitalização original do Entra ID (mista).
+    getPolicy.mockResolvedValue(
+      makeCodeAssistPolicy([`${CODE_ASSIST_PREFIX}adriana.domingues@valor.com.br`])
+    );
+    await removeCodeAssistUser('Adriana.Domingues@valor.com.br');
+    const policy = setPolicy.mock.calls[0][0];
+    const binding = policy.bindings.find((b) => b.role === CODE_ASSIST_ROLE);
+    expect(binding.members).not.toContain(`${CODE_ASSIST_PREFIX}adriana.domingues@valor.com.br`);
   });
 });
