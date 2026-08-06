@@ -36,12 +36,16 @@ Crie uma service account no projeto `agentspace-469418` com as seguintes roles:
 | `roles/discoveryengine.agentspaceAdmin` | Gerenciar licenças Gemini Enterprise |
 | `roles/iam.securityAdmin` | Gerenciar a role `discoveryengine.user` no IAM |
 | `roles/iam.roleAdmin` | Auto-provisionar a custom role `iamValidationProbe`, usada para validar o principal antes de conceder acesso (ver [ADR 0002](docs/adr/0002-validacao-de-principal-via-probe-descartavel.md)) |
+| `roles/bigquery.jobUser` | Executar consultas BigQuery para a página de Custos |
+| `roles/bigquery.dataViewer` | Ler a tabela de exportação de faturamento — **concessão no dataset `billing_standard` do projeto `infra-bi-355620`** (projeto diferente do que hospeda a SA), via IAM do dataset (não `gcloud projects add-iam-policy-binding`) |
 
 Baixe a chave JSON e salve em `backend/credentials.json`.
 
 > **Por que duas roles separadas?** IAM policy do projeto (`setIamPolicy`) e a Discovery Engine API são sistemas distintos no GCP — cada um exige sua própria permissão.
 
 Habilite também a **Identity and Access Management (IAM) API** no projeto (Cloud Console → APIs & Services), necessária para o auto-provisionamento da custom role `iamValidationProbe`.
+
+Para a página de **Custos**, configure a variável de ambiente `BILLING_EXPORT_TABLE` em `backend/.env` com o valor `infra-bi-355620.billing_standard.gcp_billing_export_v1_01779C_55AF20_FD92F6` — documentação em [`backend/.env.example`](backend/.env.example); veja [ADR 0006](docs/adr/0006-billing-export-como-fonte-de-custos.md) para a rationale arquitetural.
 
 ### Variáveis de ambiente (`backend/.env`)
 
