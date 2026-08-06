@@ -1,5 +1,88 @@
 const { categorizeCosts } = require('./billingService');
 
+const OLD_ENV = process.env;
+
+jest.mock('./gcpClients', () => ({
+  bigquery: { jobs: { query: jest.fn() } },
+}));
+
+function mockQueryResult(rows) {
+  return {
+    data: {
+      schema: { fields: [{ name: 'service' }, { name: 'cost' }, { name: 'currency' }] },
+      rows: rows.map(({ service, cost, currency }) => ({
+        f: [{ v: service }, { v: String(cost) }, { v: currency }],
+      })),
+    },
+  };
+}
+
+describe('getBillingSummary', () => {
+  let getBillingSummary;
+  let queryMock;
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.useFakeTimers();
+    process.env = { ...OLD_ENV, GCP_PROJECT_ID: 'agentspace-469418', BILLING_EXPORT_TABLE: 'proj.ds.tbl' };
+    // eslint-disable-next-line global-require
+    ({ bigquery: { jobs: { query: queryMock } } } = require('./gcpClients'));
+    // eslint-disable-next-line global-require
+    ({ getBillingSummary } = require('./billingService'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    process.env = OLD_ENV;
+  });
+
+  test('consulta o BigQuery filtrando pelo projeto e devolve o resumo categorizado', async () => {
+    queryMock.mockResolvedValue(mockQueryResult([
+      { service: 'Vertex AI Search', cost: 100, currency: 'BRL' },
+      { service: 'Cloud Run', cost: 10, currency: 'BRL' },
+    ]));
+
+    const summary = await getBillingSummary();
+
+    expect(summary).toMatchObject({
+      gemini: 100, infra: 10, uncategorized: 0, total: 110, currency: 'BRL',
+    });
+    expect(summary.updatedAt).toBeDefined();
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    const [call] = queryMock.mock.calls[0];
+    expect(call.projectId).toBe('agentspace-469418');
+    expect(call.requestBody.queryParameters[0].parameterValue.value).toBe('agentspace-469418');
+  });
+
+  test('usa o cache em chamadas subsequentes dentro do TTL', async () => {
+    queryMock.mockResolvedValue(mockQueryResult([{ service: 'Cloud Run', cost: 1, currency: 'BRL' }]));
+
+    await getBillingSummary();
+    await getBillingSummary();
+
+    expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('refaz a query depois que o TTL do cache expira', async () => {
+    queryMock.mockResolvedValue(mockQueryResult([{ service: 'Cloud Run', cost: 1, currency: 'BRL' }]));
+
+    await getBillingSummary();
+    jest.advanceTimersByTime(5 * 60 * 60 * 1000); // 5h > TTL de 4h
+    await getBillingSummary();
+
+    expect(queryMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('chamadas concorrentes com cache vazio compartilham a mesma query em andamento', async () => {
+    queryMock.mockResolvedValue(mockQueryResult([{ service: 'Cloud Run', cost: 1, currency: 'BRL' }]));
+
+    const [a, b] = await Promise.all([getBillingSummary(), getBillingSummary()]);
+
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(a).toEqual(b);
+  });
+});
+
 describe('categorizeCosts', () => {
   test('soma Gemini, Infra e Não categorizado, e eles fecham com o total', () => {
     const rows = [
