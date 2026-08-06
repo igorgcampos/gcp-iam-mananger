@@ -55,3 +55,29 @@ O único Papel Complementar existente hoje: uma role IAM customizada (`projects/
 _Avoid_: Code assist role, custom role (ambíguo — a Validação de Principal usa outra role customizada, descartável, só para teste de existência)
 
 _Nota de implementação_: o e-mail no principal do Workforce Pool preserva a capitalização enviada pelo Entra ID; o e-mail no membro do Cloud Identity é normalizado pelo GCP para a capitalização canônica da conta. As duas fontes podem divergir em maiúsculas/minúsculas para o mesmo usuário sem que isso signifique falha na concessão — qualquer código que cruze os dois vínculos (como `listUsers`) precisa comparar e-mails de forma case-insensitive.
+
+### Billing (custos GCP)
+
+**Billing Account**:
+Recurso do GCP, existente no nível da organização, ao qual projetos são vinculados para cobrança. A organização da Editora Globo tem 3, mas o painel só olha para a que cobre o projeto `agentspace-469418`: **"Projetos Editora Globo"** (ID `01779C-55AF20-FD92F6`). Diferente de **Organização**: a Organização é o nó raiz do GCP; a Billing Account é um recurso específico dentro dela, e um projeto se vincula a exatamente uma Billing Account por vez.
+_Avoid_: Conta de faturamento (ok em português na UI), conta de billing
+
+**Custo do Projeto**:
+O total gasto, dentro da Billing Account "Projetos Editora Globo", atribuível ao projeto `agentspace-469418`. Escopo da página de Billing: não inclui outros projetos nem as outras 2 Billing Accounts da organização. Calculado sempre como `Custo Gemini + Custo de Infra + Não Categorizado` — as três parcelas sempre somam o total, nunca deixam resto escondido.
+_Avoid_: Custo total (ambíguo — total de quê), gasto do projeto
+
+**Custo Gemini**:
+Subcategoria do Custo do Projeto: soma dos SKUs cujo `service.description` está numa lista explícita e nomeada de serviços de billing relacionados a Gemini/Agentspace (ponto de partida confirmado: `"Vertex AI Search"` — cobre as licenças Gemini Enterprise/Agentspace Enterprise Plus). É custo de *consumo do provedor*, distinto da **Licença** (que é o vínculo de atribuição a um usuário, já definida acima) — o Custo Gemini é o valor em R$ cobrado pela Billing Account por esse consumo, não o registro de quem está usando a vaga.
+_Avoid_: Custo de licenças (mistura com o conceito de Licença), custo Vertex AI (o nome de serviço correto no billing é "Vertex AI Search", não "Vertex AI")
+
+**Custo de Infra**:
+Subcategoria do Custo do Projeto: soma dos SKUs cujo `service.description` está numa lista explícita e nomeada de serviços de infraestrutura que rodam esta própria aplicação (candidatos: `Cloud Run`, `Artifact Registry`, `Cloud Logging`, `BigQuery`). Contraparte do Custo Gemini — juntos, mais o Não Categorizado, formam o Custo do Projeto. Inclui, por natureza recursiva, o próprio custo das queries que a aplicação roda contra o `billing_standard` (elas rodam no projeto `agentspace-469418`, então aparecem como SKU `BigQuery` na tabela no dia seguinte — nenhuma instrumentação própria é necessária).
+_Avoid_: Custo GCP ADMIN (nome do app, não da categoria — confunde com o card de UI), custo de aplicação (ambíguo com Custo do Projeto)
+
+**Não Categorizado**:
+Subcategoria do Custo do Projeto: soma dos SKUs cujo `service.description` não está em nenhuma das listas de Custo Gemini nem Custo de Infra. Existe para garantir que a soma das três parcelas sempre feche com o Custo do Projeto — é o alerta natural de que surgiu um serviço novo que precisa ser classificado.
+_Avoid_: Outros (usar em UI é ok, mas no glossário o nome é Não Categorizado — "Outros" é ambíguo com "outros projetos")
+
+**Billing Export (Standard usage cost)**:
+Mecanismo do GCP, já habilitado na Billing Account "Projetos Editora Globo", que grava diariamente o custo por SKU de todos os projetos da Billing Account (71 no momento desta decisão) numa tabela do BigQuery: `infra-bi-355620.billing_standard.gcp_billing_export_v1_01779C_55AF20_FD92F6` — o sufixo do nome da tabela é o ID da Billing Account, não de um projeto. É a fonte de dados de toda a página de Billing; consultada diretamente (schema padrão do Google), sem depender das tabelas/views internas de FinOps (`tbCusto*`, `vwResultadoMes*`) que outro time mantém no mesmo dataset. Distinto de **Detailed usage cost** (outro tipo de export, desabilitado, que adicionaria granularidade por recurso individual — não usado por esta feature).
+_Avoid_: Billing export genérico (especificar sempre "Standard usage cost" quando a distinção importar), export de faturamento
