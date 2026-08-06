@@ -14,6 +14,14 @@ jest.mock('googleapis', () => ({
         },
       },
     }),
+    bigquery: jest.fn().mockReturnValue({
+      projects: {
+        datasets: {
+          get: jest.fn(),
+          list: jest.fn(),
+        },
+      },
+    }),
   },
 }));
 
