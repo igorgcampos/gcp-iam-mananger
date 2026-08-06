@@ -43,6 +43,18 @@ Baixe a chave JSON e salve em `backend/credentials.json`.
 
 > **Por que duas roles separadas?** IAM policy do projeto (`setIamPolicy`) e a Discovery Engine API são sistemas distintos no GCP — cada um exige sua própria permissão.
 
+> **Como a SA consegue rodar a query do BigQuery, se a tabela fica em outro projeto?** São duas concessões, em dois lugares diferentes, e as duas são necessárias — falta uma e a query falha:
+>
+> 1. **`roles/bigquery.jobUser` no projeto `agentspace-469418`** (onde a SA já vive) — dá permissão pra *rodar e pagar* pelo job de query. Concedida do jeito normal:
+>    ```bash
+>    gcloud projects add-iam-policy-binding agentspace-469418 \
+>      --member="serviceAccount:SEU_SA@agentspace-469418.iam.gserviceaccount.com" \
+>      --role="roles/bigquery.jobUser"
+>    ```
+> 2. **`roles/bigquery.dataViewer`, mas só no dataset `billing_standard`, dentro do projeto `infra-bi-355620`** — dá permissão pra *ler* a tabela do export. Como é um recurso de outro projeto, `gcloud projects add-iam-policy-binding` não serve aqui (só afeta o projeto que você aponta, não concede nada em outro). Quem tem acesso a `infra-bi-355620` precisa entrar no **BigQuery Studio → dataset `billing_standard` → Sharing/Permissions → Add principal**, e adicionar o e-mail completo da SA (`SEU_SA@agentspace-469418.iam.gserviceaccount.com`) com a role `BigQuery Data Viewer` — **no dataset, não no projeto inteiro**, que tem dezenas de outros datasets sem relação com esta aplicação.
+>
+> A SA nunca "existe" em `infra-bi-355620` — ela só é referenciada, pelo e-mail completo, num binding IAM de um recurso que não é dela. Ver [ADR 0006](docs/adr/0006-billing-export-como-fonte-de-custos.md) para o racional completo dessa arquitetura.
+
 Habilite também a **Identity and Access Management (IAM) API** no projeto (Cloud Console → APIs & Services), necessária para o auto-provisionamento da custom role `iamValidationProbe`.
 
 Para a página de **Custos**, configure a variável de ambiente `BILLING_EXPORT_TABLE` em `backend/.env` com o valor `infra-bi-355620.billing_standard.gcp_billing_export_v1_01779C_55AF20_FD92F6` — documentação em [`backend/.env.example`](backend/.env.example); veja [ADR 0006](docs/adr/0006-billing-export-como-fonte-de-custos.md) para a rationale arquitetural.
