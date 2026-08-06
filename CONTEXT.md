@@ -68,7 +68,7 @@ _Avoid_: Custo total (ambíguo — total de quê), gasto do projeto
 
 **Custo Gemini**:
 Subcategoria do Custo do Projeto: soma dos SKUs cujo `service.description` está numa lista explícita e nomeada de serviços de billing relacionados a Gemini/Agentspace (confirmado via GCP Billing Console: `"Vertex AI Search"` — licenças Gemini Enterprise/Agentspace Enterprise Plus — e `"Vertex AI"` — consumo de modelo/LLM subjacente). É custo de *consumo do provedor*, distinto da **Licença** (que é o vínculo de atribuição a um usuário, já definida acima) — o Custo Gemini é o valor em R$ cobrado pela Billing Account por esse consumo, não o registro de quem está usando a vaga.
-_Avoid_: Custo de licenças (mistura com o conceito de Licença), custo Vertex AI (o nome de serviço correto no billing é "Vertex AI Search", não "Vertex AI")
+_Avoid_: Custo de licenças (mistura com o conceito de Licença)
 
 **Custo de Infra**:
 Subcategoria do Custo do Projeto: soma dos SKUs cujo `service.description` está numa lista explícita e nomeada de serviços de infraestrutura que rodam esta própria aplicação (candidatos: `Cloud Run`, `Artifact Registry`, `Cloud Logging`, `BigQuery`). Contraparte do Custo Gemini — juntos, mais o Não Categorizado, formam o Custo do Projeto. Inclui, por natureza recursiva, o próprio custo das queries que a aplicação roda contra o `billing_standard` (elas rodam no projeto `agentspace-469418`, então aparecem como SKU `BigQuery` na tabela no dia seguinte — nenhuma instrumentação própria é necessária).
