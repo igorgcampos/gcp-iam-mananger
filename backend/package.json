@@ -6,7 +6,8 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "test": "jest --runInBand",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "billing:services": "node scripts/list-billing-services.js"
   },
   "jest": {
     "testEnvironment": "node",
