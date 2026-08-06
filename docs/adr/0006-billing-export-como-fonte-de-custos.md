@@ -4,7 +4,7 @@ A nova página de Custos precisa mostrar, com precisão de SKU, quanto o projeto
 
 A Service Account que a aplicação já usa hoje é reaproveitada (nenhuma SA nova é criada — SAs não existem "na organização", só em projetos, o que originalmente gerou confusão ao tentar criar uma pela tela de IAM da organização). Ela recebe duas permissões novas, ambas escopadas ao mínimo necessário: `roles/bigquery.jobUser` no próprio projeto `agentspace-469418` (roda e paga pelas queries), e `roles/bigquery.dataViewer` só no dataset `billing_standard` (não no projeto `infra-bi-355620` inteiro, que tem dezenas de outros datasets de outras áreas). Nenhuma permissão em nível de organização ou de Billing Account é necessária — o binding de `roles/billing.viewer` cogitado inicialmente foi descartado quando a rota via Cloud Billing API foi abandonada.
 
-As duas categorias (Gemini/Infra) são listas explícitas e nomeadas de `service.description` (ex.: `["Vertex AI Search"]` para Gemini), mantidas manualmente no código — não uma heurística automática. Qualquer SKU fora das duas listas cai em "Não Categorizado", que existe justamente para que a soma das categorias sempre feche com o total e sirva de alerta para quando um serviço novo precisar ser classificado.
+As duas categorias (Gemini/Infra) são listas explícitas e nomeadas de `service.description` (ex.: `["Vertex AI Search", "Vertex AI"]` para Gemini, confirmado contra dados reais do Console), mantidas manualmente no código — não uma heurística automática. Qualquer SKU fora das duas listas cai em "Não Categorizado", que existe justamente para que a soma das categorias sempre feche com o total e sirva de alerta para quando um serviço novo precisar ser classificado.
 
 ## Considered Options
 
