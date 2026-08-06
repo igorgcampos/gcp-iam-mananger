@@ -6,14 +6,16 @@ import {
 } from 'antd';
 import {
   KeyOutlined, RobotOutlined, LogoutOutlined, UserOutlined, StopOutlined, MailOutlined,
-  DashboardOutlined, LeftOutlined, RightOutlined,
+  DashboardOutlined, LeftOutlined, RightOutlined, WalletOutlined,
 } from '@ant-design/icons';
 import IAMPage from './pages/IAMPage';
 import GeminiPage from './pages/GeminiPage';
 import DashboardPage from './pages/DashboardPage';
+import BillingPage from './pages/BillingPage';
 import { getMe, logout } from './api/auth';
 import { useIamData } from './hooks/useIamData';
 import { useGeminiData } from './hooks/useGeminiData';
+import { useBillingData } from './hooks/useBillingData';
 // Versão otimizada (192×192, ~30KB) do arquivo original enviado — o badge é
 // exibido a 64px, então não faz sentido carregar o PNG de 1024px/1,4MB.
 import logo from './assets/logo-192.png';
@@ -135,6 +137,7 @@ const PAGE_TITLES = {
   dashboard: 'Visão Geral',
   iam: 'Gerenciamento de Acesso — Discovery Engine',
   gemini: 'Gemini Enterprise — Gestão de Licenças',
+  custos: 'Custos',
 };
 
 export default function App() {
@@ -161,6 +164,7 @@ export default function App() {
   // bater nas APIs do GCP antes da hora (e gerar erro 401 na tela de login).
   const iam = useIamData({ enabled: authState === 'authenticated' });
   const gemini = useGeminiData({ enabled: authState === 'authenticated' });
+  const billing = useBillingData({ enabled: authState === 'authenticated' });
 
   useEffect(() => {
     localStorage.setItem(SIDER_COLLAPSED_KEY, collapsed ? '1' : '0');
@@ -266,6 +270,11 @@ export default function App() {
                 icon: <RobotOutlined />,
                 label: 'Gemini Enterprise',
               },
+              {
+                key: 'custos',
+                icon: <WalletOutlined />,
+                label: 'Custos',
+              },
             ]}
           />
           <div style={{
@@ -342,11 +351,11 @@ export default function App() {
           </Title>
         </Header>
         <Content style={{ background: token.colorBgLayout }}>
-          {/* As três páginas ficam sempre montadas — só escondidas via CSS —
+          {/* As quatro páginas ficam sempre montadas — só escondidas via CSS —
               para preservar estado local (busca, filtros, ordenação) ao
               trocar de aba e não recriar o "flash" de carregamento. Os dados
-              em si (iam/gemini) vêm de fora, então trocar de aba nunca
-              dispara uma busca nova. */}
+              em si (iam/gemini/billing) vêm de fora, então trocar de aba
+              nunca dispara uma busca nova. */}
           <div style={{ display: selected === 'dashboard' ? 'block' : 'none' }}>
             <DashboardPage
               iamUsers={iam.users}
@@ -387,6 +396,14 @@ export default function App() {
               reload={gemini.reload}
               initialSearch={pendingSearch}
               openInactivityReport={pendingInactivityReport}
+            />
+          </div>
+          <div style={{ display: selected === 'custos' ? 'block' : 'none' }}>
+            <BillingPage
+              summary={billing.summary}
+              loading={billing.loading}
+              lastUpdated={billing.lastUpdated}
+              reload={billing.reload}
             />
           </div>
         </Content>
