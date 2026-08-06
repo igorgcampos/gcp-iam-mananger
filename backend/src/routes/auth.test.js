@@ -22,6 +22,7 @@ jest.mock('../services/iamService', () => ({
 jest.mock('../services/geminiService', () => ({
   listLicenseConfigs: jest.fn(), listUserLicenses: jest.fn(), assignLicense: jest.fn(), removeLicense: jest.fn(),
 }));
+jest.mock('../services/billingService', () => ({ getBillingSummary: jest.fn() }));
 jest.mock('../services/gcpAuth', () => ({ auth: {}, getAccessToken: jest.fn() }));
 jest.mock('googleapis', () => ({
   google: { cloudresourcemanager: jest.fn().mockReturnValue({ projects: {} }) },

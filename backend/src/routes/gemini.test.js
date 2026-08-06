@@ -16,6 +16,8 @@ jest.mock('../services/iamService', () => ({
   removeUser: jest.fn(),
 }));
 
+jest.mock('../services/billingService', () => ({ getBillingSummary: jest.fn() }));
+
 jest.mock('../services/gcpAuth', () => ({ auth: {}, getAccessToken: jest.fn() }));
 
 jest.mock('googleapis', () => ({
