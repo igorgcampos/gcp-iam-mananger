@@ -205,6 +205,14 @@ Exibe as subscriptions ativas (total vs. atribuído por tier) e a lista completa
 
 Ambas as telas fazem polling a cada **30 segundos** e têm botão de refresh manual.
 
+### Tela Custos
+
+Mostra o gasto do projeto `agentspace-469418` no mês corrente até hoje, dividido em três categorias que sempre somam o total: **Gemini** (`Vertex AI Search` + `Vertex AI` — licenças e consumo de modelo), **Infra** (`Cloud Run`, `Artifact Registry`, `Cloud Logging`, `BigQuery` — o que roda a própria aplicação) e **Não categorizado** (qualquer serviço fora dessas duas listas — existe para garantir que a soma sempre feche com o total, e serve de alerta quando um serviço novo precisa ser classificado).
+
+**De onde vêm os dados:** o backend consulta diretamente a tabela do **BigQuery Billing Export** (`infra-bi-355620.billing_standard.gcp_billing_export_v1_...`), não a Cloud Billing API — ver [ADR 0006](docs/adr/0006-billing-export-como-fonte-de-custos.md) para o porquê. Como esse export só é atualizado 1x/dia pelo próprio GCP, o backend cacheia o resultado em memória por **4 horas**; não há polling agressivo (seria gasto de BigQuery sem propósito). O botão "Atualizar" dispara uma nova consulta só quando o cache já expirou.
+
+**Categorização:** as listas `GEMINI_SERVICES`/`INFRA_SERVICES` ficam hardcoded em `backend/src/services/billingService.js` — não há heurística automática. Se "Não categorizado" aparecer com um valor inesperado, rode `npm run billing:services` (dentro de `backend/`, com credenciais configuradas) para ver o breakdown real de serviços de billing do projeto e decidir se algum precisa entrar numa das listas.
+
 ---
 
 ## Arquitetura
@@ -256,6 +264,26 @@ DELETE /api/gemini/users/:email      Remove licença de um usuário
   "licenseConfig": "projects/agentspace-469418/locations/global/licenseConfigs/CONFIG_ID"
 }
 ```
+
+### Custos
+
+```
+GET    /api/billing/summary          Custo do projeto no mês corrente, por categoria
+```
+
+**GET /api/billing/summary — response:**
+```json
+{
+  "gemini": 1878.73,
+  "infra": 0,
+  "uncategorized": 0,
+  "total": 1878.73,
+  "currency": "BRL",
+  "updatedAt": "2026-08-06T19:08:55.000Z"
+}
+```
+
+Resultado cacheado no backend por até 4h — ver seção [Tela Custos](#tela-custos) acima.
 
 ---
 
