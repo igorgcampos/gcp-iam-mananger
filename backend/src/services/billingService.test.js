@@ -120,4 +120,10 @@ describe('categorizeCosts', () => {
     ];
     expect(categorizeCosts(rows).gemini).toBe(0.3);
   });
+
+  test('categoriza "Vertex AI" (sem "Search") também como Gemini', () => {
+    const result = categorizeCosts([{ service: 'Vertex AI', cost: 40.73, currency: 'BRL' }]);
+    expect(result.gemini).toBe(40.73);
+    expect(result.uncategorized).toBe(0);
+  });
 });

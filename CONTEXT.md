@@ -67,7 +67,7 @@ O total gasto, dentro da Billing Account "Projetos Editora Globo", atribuível a
 _Avoid_: Custo total (ambíguo — total de quê), gasto do projeto
 
 **Custo Gemini**:
-Subcategoria do Custo do Projeto: soma dos SKUs cujo `service.description` está numa lista explícita e nomeada de serviços de billing relacionados a Gemini/Agentspace (ponto de partida confirmado: `"Vertex AI Search"` — cobre as licenças Gemini Enterprise/Agentspace Enterprise Plus). É custo de *consumo do provedor*, distinto da **Licença** (que é o vínculo de atribuição a um usuário, já definida acima) — o Custo Gemini é o valor em R$ cobrado pela Billing Account por esse consumo, não o registro de quem está usando a vaga.
+Subcategoria do Custo do Projeto: soma dos SKUs cujo `service.description` está numa lista explícita e nomeada de serviços de billing relacionados a Gemini/Agentspace (confirmado via GCP Billing Console: `"Vertex AI Search"` — licenças Gemini Enterprise/Agentspace Enterprise Plus — e `"Vertex AI"` — consumo de modelo/LLM subjacente). É custo de *consumo do provedor*, distinto da **Licença** (que é o vínculo de atribuição a um usuário, já definida acima) — o Custo Gemini é o valor em R$ cobrado pela Billing Account por esse consumo, não o registro de quem está usando a vaga.
 _Avoid_: Custo de licenças (mistura com o conceito de Licença), custo Vertex AI (o nome de serviço correto no billing é "Vertex AI Search", não "Vertex AI")
 
 **Custo de Infra**:

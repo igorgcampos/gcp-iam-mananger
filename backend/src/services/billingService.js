@@ -5,7 +5,7 @@ const { bigquery } = require('./gcpClients');
 // parar de usar) um serviço GCP. Ver Task 2 (backend/scripts/list-billing-services.js)
 // para descobrir os nomes reais em uso. Qualquer serviço fora das duas listas
 // cai em "uncategorized" — de propósito, ver CONTEXT.md ("Não Categorizado").
-const GEMINI_SERVICES = ['Vertex AI Search'];
+const GEMINI_SERVICES = ['Vertex AI Search', 'Vertex AI'];
 const INFRA_SERVICES = ['Cloud Run', 'Artifact Registry', 'Cloud Logging', 'BigQuery'];
 
 function round2(n) {
