@@ -1,6 +1,6 @@
 # ADC e Secret Manager (sem chave estática) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Eliminar `backend/credentials.json` (chave estática de service account) em dev e produção, substituindo por Application Default Credentials (ADC); mover os dois segredos reais (`AZURE_CLIENT_SECRET`, `SESSION_JWT_SECRET`) para o Secret Manager, buscados pelo backend em dev via API/ADC e injetados nativamente pelo Cloud Run (`--update-secrets`) em produção.
 
@@ -34,17 +34,17 @@
 **Files:**
 - Modify: `backend/package.json`
 
-- [ ] **Step 1: Instalar**
+- [x] **Step 1: Instalar**
 
 ```bash
 cd backend && npm install @google-cloud/secret-manager
 ```
 
-- [ ] **Step 2: Conferir que entrou em `dependencies` (não `devDependencies`)**
+- [x] **Step 2: Conferir que entrou em `dependencies` (não `devDependencies`)**
 
 Abra `backend/package.json` e confirme a nova linha em `"dependencies"`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/package.json backend/package-lock.json
@@ -59,7 +59,7 @@ git commit -m "chore(backend): adiciona dependencia @google-cloud/secret-manager
 - Create: `backend/src/services/secretManager.js`
 - Test: `backend/src/services/secretManager.test.js`
 
-- [ ] **Step 1: Escrever o teste falho**
+- [x] **Step 1: Escrever o teste falho**
 
 Crie `backend/src/services/secretManager.test.js`:
 
@@ -134,12 +134,12 @@ describe('secretManager', () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `cd backend && npx jest secretManager -v`
 Expected: FAIL — `Cannot find module './secretManager'`
 
-- [ ] **Step 3: Implementar `secretManager.js`**
+- [x] **Step 3: Implementar `secretManager.js`**
 
 Crie `backend/src/services/secretManager.js`:
 
@@ -213,12 +213,12 @@ async function resolveAppSecrets() {
 module.exports = { resolveSecret, resolveAppSecrets };
 ```
 
-- [ ] **Step 4: Rodar e confirmar que passa**
+- [x] **Step 4: Rodar e confirmar que passa**
 
 Run: `cd backend && npx jest secretManager -v`
 Expected: PASS (4 testes)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/services/secretManager.js backend/src/services/secretManager.test.js
@@ -232,7 +232,7 @@ git commit -m "feat(backend): adiciona secretManager com fallback condicional pa
 **Files:**
 - Modify: `backend/src/services/gcpAuth.js`
 
-- [ ] **Step 1: Editar**
+- [x] **Step 1: Editar**
 
 `backend/src/services/gcpAuth.js` fica:
 
@@ -258,12 +258,12 @@ async function getAccessToken() {
 module.exports = { auth, getAccessToken };
 ```
 
-- [ ] **Step 2: Rodar a suíte inteira do backend para confirmar que nada quebrou**
+- [x] **Step 2: Rodar a suíte inteira do backend para confirmar que nada quebrou**
 
 Run: `cd backend && npm test`
 Expected: PASS (nenhuma suíte usa `GOOGLE_APPLICATION_CREDENTIALS`/`keyFile` diretamente — todas mockam os serviços do GCP).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/src/services/gcpAuth.js
@@ -277,7 +277,7 @@ git commit -m "feat(backend): remove chave estatica de gcpAuth.js, usa ADC"
 **Files:**
 - Modify: `backend/src/index.js`
 
-- [ ] **Step 1: Editar**
+- [x] **Step 1: Editar**
 
 `backend/src/index.js` fica:
 
@@ -309,22 +309,22 @@ async function main() {
 main();
 ```
 
-- [ ] **Step 2: Testar manualmente que o boot falha sem os segredos**
+- [x] **Step 2: Testar manualmente que o boot falha sem os segredos**
 
 Run (dentro de `backend/`, sem `AZURE_CLIENT_SECRET_ID`/`SESSION_JWT_SECRET_ID` válidos no `.env`): `node src/index.js`
 Expected: processo imprime `Falha ao resolver segredos no boot: ...` e sai (não fica escutando porta nenhuma).
 
-- [ ] **Step 3: Testar manualmente que o boot sobe com os segredos configurados**
+- [x] **Step 3: Testar manualmente que o boot sobe com os segredos configurados**
 
 Com `backend/.env` apontando para os IDs reais dos secrets `-dev` e a ADC impersonada ativa: `node src/index.js`
 Expected: `Backend running on http://localhost:3001`.
 
-- [ ] **Step 4: Rodar a suíte inteira do backend**
+- [x] **Step 4: Rodar a suíte inteira do backend**
 
 Run: `cd backend && npm test`
 Expected: PASS — as suítes de rotas importam `app.js` diretamente, não `index.js`, então não passam pelo bootstrap.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/index.js
@@ -338,7 +338,7 @@ git commit -m "feat(backend): index.js resolve segredos no boot antes de subir o
 **Files:**
 - Modify: `docker-compose.yml`
 
-- [ ] **Step 1: Editar o serviço `backend`**
+- [x] **Step 1: Editar o serviço `backend`**
 
 Em `docker-compose.yml`, troque:
 
@@ -371,19 +371,19 @@ por:
       - ${HOME}/.config/gcloud/application_default_credentials.json:/secrets/adc.json:ro
 ```
 
-- [ ] **Step 2: Validar o compose file**
+- [x] **Step 2: Validar o compose file**
 
 Run: `docker compose config --quiet`
 Expected: sem erro (valida sintaxe/interpolação de `${HOME}`).
 
-- [ ] **Step 3: Smoke test manual**
+- [x] **Step 3: Smoke test manual**
 
 Com a ADC impersonada já configurada no host (Task/Pré-requisito do README) e `backend/.env` completo:
 
 Run: `docker compose up --build -d && curl -s http://localhost:3001/api/health`
 Expected: `{"status":"ok"}`. Depois: `docker compose down`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docker-compose.yml
@@ -394,21 +394,21 @@ git commit -m "feat(docker): monta ADC do host no lugar de credentials.json"
 
 ### Task 6: Verificação final
 
-- [ ] **Step 1: Suíte completa do backend**
+- [x] **Step 1: Suíte completa do backend**
 
 Run: `cd backend && npm test`
 Expected: PASS, todas as suítes.
 
-- [ ] **Step 2: Lint (se configurado)**
+- [x] **Step 2: Lint (se configurado)**
 
 Run: `cd backend && npm run lint 2>/dev/null || echo "sem script de lint"`
 
-- [ ] **Step 3: Conferir que nenhuma referência a `credentials.json`/`keyFile` sobrou no código**
+- [x] **Step 3: Conferir que nenhuma referência a `credentials.json`/`keyFile` sobrou no código**
 
 Run: `grep -rn "credentials.json\|keyFile" backend/src docker-compose.yml`
 Expected: nenhum resultado.
 
-- [ ] **Step 4: Commit final (se sobrou algo solto)**
+- [x] **Step 4: Commit final (se sobrou algo solto)**
 
 ```bash
 git status --short
