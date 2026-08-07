@@ -67,4 +67,17 @@ describe('BillingCategoryCard', () => {
     render(<BillingCategoryCard label="Total do projeto" value={210} currency="BRL" />);
     expect(screen.queryByTestId('billing-category-chevron')).not.toBeInTheDocument();
   });
+
+  it('expande com o teclado (Enter) quando o card está focado', async () => {
+    const user = userEvent.setup();
+    render(
+      <BillingCategoryCard label="Gemini" value={180} currency="BRL" items={geminiItems} />,
+    );
+
+    const trigger = screen.getByText('Gemini').closest('[role="button"]');
+    trigger.focus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByText('Vertex AI Search')).toBeInTheDocument();
+  });
 });

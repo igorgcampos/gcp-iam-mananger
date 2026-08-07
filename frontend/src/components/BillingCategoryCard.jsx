@@ -19,7 +19,13 @@ export default function BillingCategoryCard({
       bordered
       className="stat-card"
       style={{ borderRadius: 16, cursor: expandable ? 'pointer' : 'default' }}
+      role={expandable ? 'button' : undefined}
+      tabIndex={expandable ? 0 : undefined}
+      aria-expanded={expandable ? expanded : undefined}
       onClick={expandable ? () => setExpanded((v) => !v) : undefined}
+      onKeyDown={expandable ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded((v) => !v); }
+      } : undefined}
     >
       <Space align="center" size={12} style={{ width: '100%', justifyContent: 'space-between' }}>
         <Space align="center" size={12}>
