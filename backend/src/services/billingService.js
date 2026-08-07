@@ -12,29 +12,57 @@ function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+function groupByServiceAndSku(rows) {
+  const byService = new Map();
+  rows.forEach(({ service, sku, cost }) => {
+    if (!byService.has(service)) byService.set(service, new Map());
+    const skuMap = byService.get(service);
+    skuMap.set(sku, (skuMap.get(sku) || 0) + cost);
+  });
+
+  return Array.from(byService.entries())
+    .map(([service, skuMap]) => {
+      const skus = Array.from(skuMap.entries())
+        .map(([sku, cost]) => ({ sku, cost: round2(cost) }))
+        .sort((a, b) => b.cost - a.cost);
+      const cost = round2(skus.reduce((sum, s) => sum + s.cost, 0));
+      return { service, cost, skus };
+    })
+    .sort((a, b) => b.cost - a.cost);
+}
+
 function categorizeCosts(rows) {
-  let gemini = 0;
-  let infra = 0;
-  let uncategorized = 0;
+  const buckets = { gemini: [], infra: [], uncategorized: [] };
   let currency = null;
 
   rows.forEach((row) => {
     currency = currency || row.currency;
     if (GEMINI_SERVICES.includes(row.service)) {
-      gemini += row.cost;
+      buckets.gemini.push(row);
     } else if (INFRA_SERVICES.includes(row.service)) {
-      infra += row.cost;
+      buckets.infra.push(row);
     } else {
-      uncategorized += row.cost;
+      buckets.uncategorized.push(row);
     }
   });
 
+  const items = {
+    gemini: groupByServiceAndSku(buckets.gemini),
+    infra: groupByServiceAndSku(buckets.infra),
+    uncategorized: groupByServiceAndSku(buckets.uncategorized),
+  };
+
+  const gemini = round2(items.gemini.reduce((sum, s) => sum + s.cost, 0));
+  const infra = round2(items.infra.reduce((sum, s) => sum + s.cost, 0));
+  const uncategorized = round2(items.uncategorized.reduce((sum, s) => sum + s.cost, 0));
+
   return {
-    gemini: round2(gemini),
-    infra: round2(infra),
-    uncategorized: round2(uncategorized),
+    gemini,
+    infra,
+    uncategorized,
     total: round2(gemini + infra + uncategorized),
     currency: currency || 'BRL',
+    items,
   };
 }
 
