@@ -9,6 +9,7 @@ dist/
 .agents/skills/
 .aider-desk/
 .claude/settings.local.json
+.codex
 # Logs locais
 *.log
 .worktrees/
