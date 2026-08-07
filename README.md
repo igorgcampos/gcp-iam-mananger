@@ -50,7 +50,7 @@ Crie uma service account no projeto `agentspace-469418` com as seguintes roles:
 | `roles/iam.roleAdmin` | Auto-provisionar a custom role `iamValidationProbe`, usada para validar o principal antes de conceder acesso (ver [ADR 0002](docs/adr/0002-validacao-de-principal-via-probe-descartavel.md)) |
 | `roles/bigquery.jobUser` | Executar consultas BigQuery para a página de Custos |
 | `roles/bigquery.dataViewer` | Ler a tabela de exportação de faturamento — **concessão no dataset `billing_standard` do projeto `infra-bi-355620`** (projeto diferente do que hospeda a SA), via IAM do dataset (não `gcloud projects add-iam-policy-binding`) |
-| `roles/secretmanager.secretAccessor` | Ler `AZURE_CLIENT_SECRET`/`SESSION_JWT_SECRET` no Secret Manager — concedido nos 4 secrets individuais (`azure-client-secret-{dev,prod}`, `session-jwt-secret-{dev,prod}`), não no projeto inteiro (ver seção [Autenticação (SSO)](#autenticação-sso)) |
+| `roles/secretmanager.secretAccessor` | Ler `AZURE_CLIENT_SECRET`/`SESSION_JWT_SECRET` no Secret Manager — concedido nos secrets individuais, não no projeto inteiro (ver seção [Autenticação (SSO)](#autenticação-sso)) |
 
 Nenhuma chave JSON é baixada. Em vez disso, cada desenvolvedor recebe **impersonation** sobre essa SA:
 
@@ -146,35 +146,37 @@ FRONTEND_BASE_URL=http://localhost:5173
 # AZURE_CLIENT_SECRET e SESSION_JWT_SECRET NÃO entram aqui como valor —
 # só o ID do secret no Secret Manager de onde o backend deve buscá-los em
 # dev (ver seção "Segredos no Secret Manager" abaixo e ADR 0007).
-AZURE_CLIENT_SECRET_ID=azure-client-secret-dev
-SESSION_JWT_SECRET_ID=session-jwt-secret-dev
+AZURE_CLIENT_SECRET_ID=AZURE_CLIENT_SECRET
+SESSION_JWT_SECRET_ID=SESSION_JWT_SECRET
 ```
 
 > Esse bloco é idêntico ao que já vem em [`backend/.env.example`](backend/.env.example) — `cp backend/.env.example backend/.env` já traz esses placeholders prontos para você substituir pelos valores reais.
 
 ### Segredos no Secret Manager
 
-`AZURE_CLIENT_SECRET` e `SESSION_JWT_SECRET` são os dois segredos reais da aplicação — nunca ficam em texto plano em `.env`, em nenhum ambiente (ver [ADR 0007](docs/adr/0007-adc-e-secret-manager-para-credenciais.md)). Os dois vivem no Secret Manager do projeto `agentspace-469418`, um secret por segredo por ambiente:
+`AZURE_CLIENT_SECRET` e `SESSION_JWT_SECRET` são os dois segredos reais da aplicação — nunca ficam em texto plano em `.env`, em nenhum ambiente (ver [ADR 0007](docs/adr/0007-adc-e-secret-manager-para-credenciais.md)). Os dois vivem no Secret Manager do projeto `agentspace-469418`:
 
 | Secret | Conteúdo |
 |---|---|
-| `azure-client-secret-dev` / `azure-client-secret-prod` | Um dos dois Client Secrets gerados no App Registration (ver [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md)) — **nunca o mesmo valor nos dois** |
-| `session-jwt-secret-dev` / `session-jwt-secret-prod` | Assina o cookie de sessão do painel (JWT HS256) — gerado localmente com `openssl rand -hex 32`, **nunca o mesmo valor nos dois** |
+| `AZURE_CLIENT_SECRET` | Client Secret gerado no App Registration (ver [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md)) |
+| `SESSION_JWT_SECRET` | Assina o cookie de sessão do painel (JWT HS256) — gerado localmente com `openssl rand -hex 32` |
+
+> **Débito técnico conhecido:** por enquanto é **um único secret de cada, compartilhado entre dev e produção** — não a separação por ambiente que o [ADR 0007](docs/adr/0007-adc-e-secret-manager-para-credenciais.md) original recomendava. Simplifica o primeiro deploy, mas significa que rotacionar ou vazar um dos dois afeta os dois ambientes ao mesmo tempo. Migrar para secrets separados por ambiente é uma melhoria futura, não uma mudança de código — só criar `AZURE_CLIENT_SECRET_PROD`/`SESSION_JWT_SECRET_PROD` e apontar o `--update-secrets` do Cloud Run pra eles.
+
+> Os nomes dos secrets no Secret Manager são iguais ao nome da env var (`AZURE_CLIENT_SECRET`, `SESSION_JWT_SECRET`, maiúsculo) — não há uma convenção de nomenclatura diferente (minúsculo/hífen) sendo aplicada aqui.
 
 Criação inicial (uma vez, por quem tem permissão de administrar o Secret Manager no projeto):
 
 ```bash
 # Client Secret do App Registration (copie o valor gerado no Entra ID)
-echo -n "COLOQUE_O_CLIENT_SECRET_DEV_AQUI" | gcloud secrets create azure-client-secret-dev --data-file=-
-echo -n "COLOQUE_O_CLIENT_SECRET_PROD_AQUI" | gcloud secrets create azure-client-secret-prod --data-file=-
+echo -n "COLOQUE_O_CLIENT_SECRET_AQUI" | gcloud secrets create AZURE_CLIENT_SECRET --data-file=-
 
-# SESSION_JWT_SECRET — gerado na hora, nunca reutilizado entre ambientes
-openssl rand -hex 32 | tr -d '\n' | gcloud secrets create session-jwt-secret-dev --data-file=-
-openssl rand -hex 32 | tr -d '\n' | gcloud secrets create session-jwt-secret-prod --data-file=-
+# SESSION_JWT_SECRET — gerado na hora
+openssl rand -hex 32 | tr -d '\n' | gcloud secrets create SESSION_JWT_SECRET --data-file=-
 
 # A SA usada pelo painel (impersonada em dev, anexada ao Cloud Run em prod)
-# precisa ler os 4 secrets:
-for secret in azure-client-secret-dev azure-client-secret-prod session-jwt-secret-dev session-jwt-secret-prod; do
+# precisa ler os 2 secrets:
+for secret in AZURE_CLIENT_SECRET SESSION_JWT_SECRET; do
   gcloud secrets add-iam-policy-binding "$secret" \
     --member="serviceAccount:SEU_SA@agentspace-469418.iam.gserviceaccount.com" \
     --role="roles/secretmanager.secretAccessor"
@@ -241,6 +243,8 @@ docker run -p 8080:8080 -e BACKEND_URL=http://host.docker.internal:3001 gcp-iam-
 
 ### Levando para o Cloud Run
 
+> Passo a passo completo do primeiro deploy manual (APIs, Artifact Registry, Secret Manager, os dois `gcloud run deploy`, domínio customizado) em [`docs/deploy-cloud-run-manual.md`](docs/deploy-cloud-run-manual.md). Os pontos abaixo são só o resumo arquitetural.
+
 Cada imagem já respeita o contrato do Cloud Run (escuta `$PORT`, stateless, roda como usuário não-root):
 
 - **Backend:** nenhuma chave de service account é levada para produção — anexe a SA diretamente ao serviço Cloud Run (`--service-account`) e nunca defina `GOOGLE_APPLICATION_CREDENTIALS`; o ADC resolve sozinho via metadata server (ver [ADR 0007](docs/adr/0007-adc-e-secret-manager-para-credenciais.md)). Os dois segredos reais (`AZURE_CLIENT_SECRET`, `SESSION_JWT_SECRET`) são injetados via `--update-secrets`, lidos do Secret Manager pelo próprio Cloud Run — nunca via `--set-env-vars`, que ficaria em texto plano na configuração do serviço:
@@ -250,7 +254,7 @@ Cada imagem já respeita o contrato do Cloud Run (escuta `$PORT`, stateless, rod
     --image=IMAGEM_DO_BACKEND \
     --service-account=SEU_SA@agentspace-469418.iam.gserviceaccount.com \
     --set-env-vars="GCP_PROJECT_ID=agentspace-469418,AZURE_TENANT_ID=...,AZURE_CLIENT_ID=...,AZURE_ALLOWED_GROUP_ID=...,FRONTEND_BASE_URL=https://gcp-admin.edglobo.com.br,BILLING_EXPORT_TABLE=..." \
-    --update-secrets="AZURE_CLIENT_SECRET=azure-client-secret-prod:latest,SESSION_JWT_SECRET=session-jwt-secret-prod:latest"
+    --update-secrets="AZURE_CLIENT_SECRET=AZURE_CLIENT_SECRET:latest,SESSION_JWT_SECRET=SESSION_JWT_SECRET:latest"
   ```
 
 - **Frontend:** ao fazer deploy, defina a env var `BACKEND_URL` do serviço com a URL pública do backend no Cloud Run (ex.: `https://backend-xxxx-uc.a.run.app`) e passe `VITE_GCP_PROJECT_ID` como `--build-arg` no build da imagem.

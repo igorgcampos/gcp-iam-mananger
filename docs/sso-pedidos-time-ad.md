@@ -12,9 +12,10 @@ Checklist do que precisa ser pedido/confirmado com o time de AD (Entra ID / Micr
 
 ## 2. Client Secret
 
-- Gerar **dois Client Secrets** para o mesmo App Registration acima (blade "Certificates & secrets"), rotulados **"dev"** e **"prod"** — um App Registration só, dois valores de secret. Ver [ADR 0007](adr/0007-adc-e-secret-manager-para-credenciais.md) para o porquê de separar por ambiente em vez de reaproveitar o mesmo valor.
-- Definir um prazo de expiração e um responsável por rotacionar antes do vencimento, para os dois (o Client Secret também é usado no Client Credentials Flow para a checagem de grupo via Graph — ver item 3).
-- **Nunca commitar o valor real e nunca colocar em `.env`** — os dois valores vão direto para o Secret Manager, como `azure-client-secret-dev` e `azure-client-secret-prod` no projeto `agentspace-469418` (ver seção "Autenticação (SSO)" do README para os comandos `gcloud secrets create`). `AZURE_CLIENT_SECRET` só existe como env var populada em runtime (pelo `--update-secrets` do Cloud Run em produção, ou buscada da API do Secret Manager pelo próprio backend em dev) — nunca como texto plano em disco.
+- Gerar um **Client Secret** para o App Registration acima (blade "Certificates & secrets").
+- Definir um prazo de expiração e um responsável por rotacionar antes do vencimento (o Client Secret também é usado no Client Credentials Flow para a checagem de grupo via Graph — ver item 3).
+- **Nunca commitar o valor real e nunca colocar em `.env`** — o valor vai direto para o Secret Manager, como `AZURE_CLIENT_SECRET` no projeto `agentspace-469418` (ver seção "Autenticação (SSO)" do README para os comandos `gcloud secrets create`). `AZURE_CLIENT_SECRET` só existe como env var populada em runtime (pelo `--update-secrets` do Cloud Run em produção, ou buscada da API do Secret Manager pelo próprio backend em dev) — nunca como texto plano em disco.
+- **Débito técnico conhecido:** hoje é um secret só, compartilhado entre dev e produção — o [ADR 0007](adr/0007-adc-e-secret-manager-para-credenciais.md) recomendava originalmente separar por ambiente (dois valores de Client Secret, um `AZURE_CLIENT_SECRET_DEV` e outro `AZURE_CLIENT_SECRET_PROD`). Ficou de fora do primeiro deploy por simplicidade; ver a nota de atualização na ADR para migrar depois.
 
 ## 3. Permissão de API (Microsoft Graph)
 
