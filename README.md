@@ -291,6 +291,8 @@ Ambas as telas fazem polling a cada **30 segundos** e têm botão de refresh man
 
 Mostra o gasto do projeto `agentspace-469418` no mês corrente até hoje, dividido em três categorias que sempre somam o total: **Gemini** (`Vertex AI Search` + `Vertex AI` — licenças e consumo de modelo), **Infra** (`Cloud Run`, `Artifact Registry`, `Cloud Logging`, `BigQuery` — o que roda a própria aplicação) e **Não categorizado** (qualquer serviço fora dessas duas listas — existe para garantir que a soma sempre feche com o total, e serve de alerta quando um serviço novo precisa ser classificado).
 
+**Drill-down por SKU:** clicar num card de categoria (Gemini, Infra ou Não categorizado) expande inline a lista de Serviços daquela categoria, e dentro de cada Serviço os SKUs correspondentes — ambos ordenados do maior custo pro menor. Vários cards podem ficar expandidos ao mesmo tempo, de forma independente. O card "Total do projeto" não tem essa interação (não existe uma lista de SKUs coerente pra ele). Categoria sem custo no mês continua clicável e mostra "Nenhum custo neste período" ao expandir.
+
 **De onde vêm os dados:** o backend consulta diretamente a tabela do **BigQuery Billing Export** (`infra-bi-355620.billing_standard.gcp_billing_export_v1_...`), não a Cloud Billing API — ver [ADR 0006](docs/adr/0006-billing-export-como-fonte-de-custos.md) para o porquê. Como esse export só é atualizado 1x/dia pelo próprio GCP, o backend cacheia o resultado em memória por **4 horas**; não há polling agressivo (seria gasto de BigQuery sem propósito). O botão "Atualizar" dispara uma nova consulta só quando o cache já expirou.
 
 **Categorização:** as listas `GEMINI_SERVICES`/`INFRA_SERVICES` ficam hardcoded em `backend/src/services/billingService.js` — não há heurística automática. Se "Não categorizado" aparecer com um valor inesperado, rode `npm run billing:services` (dentro de `backend/`, com credenciais configuradas) para ver o breakdown real de serviços de billing do projeto e decidir se algum precisa entrar numa das listas.
@@ -361,9 +363,26 @@ GET    /api/billing/summary          Custo do projeto no mês corrente, por cate
   "uncategorized": 0,
   "total": 1878.73,
   "currency": "BRL",
+  "items": {
+    "gemini": [
+      {
+        "service": "Vertex AI Search",
+        "cost": 1696.14,
+        "skus": [
+          { "sku": "Vertex AI Search Query API", "cost": 1500.00 },
+          { "sku": "Vertex AI Search Storage", "cost": 196.14 }
+        ]
+      },
+      { "service": "Vertex AI", "cost": 182.59, "skus": [{ "sku": "Vertex AI Online Prediction", "cost": 182.59 }] }
+    ],
+    "infra": [],
+    "uncategorized": []
+  },
   "updatedAt": "2026-08-06T19:08:55.000Z"
 }
 ```
+
+`items` agrupa cada categoria por Serviço (`service.description` do billing export) e, dentro de cada Serviço, por SKU (`sku.description`), ambos ordenados por custo decrescente — é o que alimenta o drill-down por card da [Tela Custos](#tela-custos). SKUs sem `sku.description` no billing export aparecem como `"Outros"`.
 
 Resultado cacheado no backend por até 4h — ver seção [Tela Custos](#tela-custos) acima.
 
