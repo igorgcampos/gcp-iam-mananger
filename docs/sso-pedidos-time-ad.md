@@ -12,9 +12,9 @@ Checklist do que precisa ser pedido/confirmado com o time de AD (Entra ID / Micr
 
 ## 2. Client Secret
 
-- Gerar um **Client Secret** para o App Registration acima → `AZURE_CLIENT_SECRET`.
-- Definir um prazo de expiração e um responsável por rotacionar antes do vencimento (o Client Secret também é usado no Client Credentials Flow para a checagem de grupo via Graph — ver item 3).
-- **Nunca commitar o valor real** — só entra em `backend/.env` local ou no gerenciador de segredos do ambiente de produção (Cloud Run).
+- Gerar **dois Client Secrets** para o mesmo App Registration acima (blade "Certificates & secrets"), rotulados **"dev"** e **"prod"** — um App Registration só, dois valores de secret. Ver [ADR 0007](adr/0007-adc-e-secret-manager-para-credenciais.md) para o porquê de separar por ambiente em vez de reaproveitar o mesmo valor.
+- Definir um prazo de expiração e um responsável por rotacionar antes do vencimento, para os dois (o Client Secret também é usado no Client Credentials Flow para a checagem de grupo via Graph — ver item 3).
+- **Nunca commitar o valor real e nunca colocar em `.env`** — os dois valores vão direto para o Secret Manager, como `azure-client-secret-dev` e `azure-client-secret-prod` no projeto `agentspace-469418` (ver seção "Autenticação (SSO)" do README para os comandos `gcloud secrets create`). `AZURE_CLIENT_SECRET` só existe como env var populada em runtime (pelo `--update-secrets` do Cloud Run em produção, ou buscada da API do Secret Manager pelo próprio backend em dev) — nunca como texto plano em disco.
 
 ## 3. Permissão de API (Microsoft Graph)
 
@@ -50,7 +50,7 @@ Cadastrar os três valores abaixo como Redirect URIs válidos do App Registratio
 |---|---|
 | `AZURE_TENANT_ID` | App Registration (item 1) |
 | `AZURE_CLIENT_ID` | App Registration (item 1) |
-| `AZURE_CLIENT_SECRET` | Client Secret (item 2) |
+| `AZURE_CLIENT_SECRET` | Client Secret (item 2) — **não** é uma env var configurada em `.env`; é populada em runtime a partir do Secret Manager (ver ADR 0007 e seção "Autenticação (SSO)" do README) |
 | `AZURE_ALLOWED_GROUP_ID` | Object ID do grupo (item 5) |
 
-`SESSION_JWT_SECRET` e `FRONTEND_BASE_URL` **não** vêm do time de AD — são gerados/configurados localmente (ver seção "Autenticação (SSO)" do README).
+`SESSION_JWT_SECRET` e `FRONTEND_BASE_URL` **não** vêm do time de AD. `FRONTEND_BASE_URL` é configurado localmente por ambiente; `SESSION_JWT_SECRET` é gerado localmente mas, assim como `AZURE_CLIENT_SECRET`, vai direto para o Secret Manager, nunca para `.env` (ver ADR 0007 e seção "Autenticação (SSO)" do README).

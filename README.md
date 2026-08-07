@@ -10,12 +10,17 @@ Painel web para gerenciar acessos no Google Cloud — quem pode usar o Agentspac
 # 1. Instale as dependências
 npm run install:all
 
-# 2. Configure as credenciais
-cp backend/.env.example backend/.env
-# Coloque o arquivo JSON da service account em backend/credentials.json
-# Edite backend/.env se necessário
+# 2. Autentique com o GCP (sem chave estática — ver Pré-requisitos abaixo
+#    para instalar o gcloud CLI e pedir a role necessária antes deste passo)
+gcloud auth application-default login \
+  --impersonate-service-account=SEU_SA@agentspace-469418.iam.gserviceaccount.com
 
-# 3. Rode tudo
+# 3. Configure o .env
+cp backend/.env.example backend/.env
+# Edite backend/.env: aponte AZURE_CLIENT_SECRET_ID/SESSION_JWT_SECRET_ID
+# para os secrets do Secret Manager (ver Autenticação (SSO) abaixo)
+
+# 4. Rode tudo
 npm run dev
 ```
 
@@ -26,6 +31,13 @@ Abra `http://localhost:5173` no navegador.
 ---
 
 ## Pré-requisitos
+
+### gcloud CLI
+
+A aplicação não usa mais chave estática de service account (nem em dev, nem em produção — ver [ADR 0007](docs/adr/0007-adc-e-secret-manager-para-credenciais.md)): tanto o backend quanto você, ao rodar comandos manuais, autenticam via **Application Default Credentials (ADC)**, que vêm do gcloud CLI.
+
+1. Instale o gcloud CLI seguindo o [guia oficial](https://cloud.google.com/sdk/docs/install) — é um requisito novo para rodar o projeto localmente, mesmo antes desta mudança já era necessário para os comandos `gcloud projects add-iam-policy-binding` deste README, mas agora também é indispensável para o próprio backend subir.
+2. Autentique a CLI com sua conta Google/Workspace: `gcloud auth login`.
 
 ### Service Account no GCP
 
@@ -38,8 +50,24 @@ Crie uma service account no projeto `agentspace-469418` com as seguintes roles:
 | `roles/iam.roleAdmin` | Auto-provisionar a custom role `iamValidationProbe`, usada para validar o principal antes de conceder acesso (ver [ADR 0002](docs/adr/0002-validacao-de-principal-via-probe-descartavel.md)) |
 | `roles/bigquery.jobUser` | Executar consultas BigQuery para a página de Custos |
 | `roles/bigquery.dataViewer` | Ler a tabela de exportação de faturamento — **concessão no dataset `billing_standard` do projeto `infra-bi-355620`** (projeto diferente do que hospeda a SA), via IAM do dataset (não `gcloud projects add-iam-policy-binding`) |
+| `roles/secretmanager.secretAccessor` | Ler `AZURE_CLIENT_SECRET`/`SESSION_JWT_SECRET` no Secret Manager — concedido nos 4 secrets individuais (`azure-client-secret-{dev,prod}`, `session-jwt-secret-{dev,prod}`), não no projeto inteiro (ver seção [Autenticação (SSO)](#autenticação-sso)) |
 
-Baixe a chave JSON e salve em `backend/credentials.json`.
+Nenhuma chave JSON é baixada. Em vez disso, cada desenvolvedor recebe **impersonation** sobre essa SA:
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding SEU_SA@agentspace-469418.iam.gserviceaccount.com \
+  --member="user:dev@edglobo.com.br" \
+  --role="roles/iam.serviceAccountTokenCreator"
+```
+
+Com essa role concedida, cada dev roda uma única vez (a sessão expira periodicamente — repita o comando quando o backend passar a rejeitar a credencial):
+
+```bash
+gcloud auth application-default login \
+  --impersonate-service-account=SEU_SA@agentspace-469418.iam.gserviceaccount.com
+```
+
+Isso grava a ADC impersonada em `~/.config/gcloud/application_default_credentials.json` — o backend (rodando via `npm run dev` ou dentro do container, ver [Docker](#docker)) resolve essa credencial sozinho, sem nenhuma variável apontando para um arquivo de chave. Em produção, a mesma SA é anexada diretamente ao serviço Cloud Run (ver [Levando para o Cloud Run](#levando-para-o-cloud-run)) — dev e produção sempre falam com o GCP como a mesma identidade, só a forma de obter o token muda.
 
 > **Por que duas roles separadas?** IAM policy do projeto (`setIamPolicy`) e a Discovery Engine API são sistemas distintos no GCP — cada um exige sua própria permissão.
 
@@ -63,9 +91,10 @@ Para a página de **Custos**, configure a variável de ambiente `BILLING_EXPORT_
 
 ```env
 GCP_PROJECT_ID=agentspace-469418
-GOOGLE_APPLICATION_CREDENTIALS=./credentials.json
 PORT=3001
 ```
+
+Não existe mais `GOOGLE_APPLICATION_CREDENTIALS` apontando para um arquivo de chave — a autenticação com o GCP é via ADC (ver [gcloud CLI](#gcloud-cli) acima).
 
 > A partir da introdução do SSO, `backend/.env` também precisa das variáveis descritas em [Autenticação (SSO)](#autenticação-sso) logo abaixo.
 
@@ -104,29 +133,57 @@ AZURE_TENANT_ID=coloque-o-tenant-id-aqui
 # Application (client) ID do App Registration criado para este painel.
 AZURE_CLIENT_ID=coloque-o-client-id-aqui
 
-# Client Secret gerado para o App Registration acima.
-AZURE_CLIENT_SECRET=coloque-o-client-secret-aqui
-
 # Object ID do grupo do AD cujos membros têm acesso ao painel.
 # Grupo já criado: devsecops-gcp-admin — falta pegar o Object ID com o time de AD.
 AZURE_ALLOWED_GROUP_ID=coloque-o-object-id-do-grupo-aqui
-
-# Segredo usado para assinar o cookie de sessão (JWT HS256) emitido após o
-# login. Gere um valor forte e único por ambiente, por exemplo com:
-#   openssl rand -hex 32
-SESSION_JWT_SECRET=gere-um-segredo-forte-com-openssl-rand--hex-32
 
 # URL base do frontend, para onde o backend redireciona após login/logout/
 # erro de autenticação. Em dev é o Vite dev server; em produção é o domínio
 # público do painel.
 FRONTEND_BASE_URL=http://localhost:5173
+
+# --- Segredos (Secret Manager) ---
+# AZURE_CLIENT_SECRET e SESSION_JWT_SECRET NÃO entram aqui como valor —
+# só o ID do secret no Secret Manager de onde o backend deve buscá-los em
+# dev (ver seção "Segredos no Secret Manager" abaixo e ADR 0007).
+AZURE_CLIENT_SECRET_ID=azure-client-secret-dev
+SESSION_JWT_SECRET_ID=session-jwt-secret-dev
 ```
 
 > Esse bloco é idêntico ao que já vem em [`backend/.env.example`](backend/.env.example) — `cp backend/.env.example backend/.env` já traz esses placeholders prontos para você substituir pelos valores reais.
 
-`SESSION_JWT_SECRET` assina o cookie de sessão do painel (JWT HS256) — gere um valor forte e exclusivo por ambiente com `openssl rand -hex 32`, nunca reutilize entre dev e produção.
+### Segredos no Secret Manager
 
-> **Antes de reiniciar o backend com essa versão:** enquanto essas variáveis não estiverem preenchidas com valores reais, `/auth/login` falha e ninguém consegue logar — e como `requireAuth` protege `/api/iam` e `/api/gemini`, o painel fica inacessível até a configuração estar completa (ver checklist em [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md)).
+`AZURE_CLIENT_SECRET` e `SESSION_JWT_SECRET` são os dois segredos reais da aplicação — nunca ficam em texto plano em `.env`, em nenhum ambiente (ver [ADR 0007](docs/adr/0007-adc-e-secret-manager-para-credenciais.md)). Os dois vivem no Secret Manager do projeto `agentspace-469418`, um secret por segredo por ambiente:
+
+| Secret | Conteúdo |
+|---|---|
+| `azure-client-secret-dev` / `azure-client-secret-prod` | Um dos dois Client Secrets gerados no App Registration (ver [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md)) — **nunca o mesmo valor nos dois** |
+| `session-jwt-secret-dev` / `session-jwt-secret-prod` | Assina o cookie de sessão do painel (JWT HS256) — gerado localmente com `openssl rand -hex 32`, **nunca o mesmo valor nos dois** |
+
+Criação inicial (uma vez, por quem tem permissão de administrar o Secret Manager no projeto):
+
+```bash
+# Client Secret do App Registration (copie o valor gerado no Entra ID)
+echo -n "COLOQUE_O_CLIENT_SECRET_DEV_AQUI" | gcloud secrets create azure-client-secret-dev --data-file=-
+echo -n "COLOQUE_O_CLIENT_SECRET_PROD_AQUI" | gcloud secrets create azure-client-secret-prod --data-file=-
+
+# SESSION_JWT_SECRET — gerado na hora, nunca reutilizado entre ambientes
+openssl rand -hex 32 | tr -d '\n' | gcloud secrets create session-jwt-secret-dev --data-file=-
+openssl rand -hex 32 | tr -d '\n' | gcloud secrets create session-jwt-secret-prod --data-file=-
+
+# A SA usada pelo painel (impersonada em dev, anexada ao Cloud Run em prod)
+# precisa ler os 4 secrets:
+for secret in azure-client-secret-dev azure-client-secret-prod session-jwt-secret-dev session-jwt-secret-prod; do
+  gcloud secrets add-iam-policy-binding "$secret" \
+    --member="serviceAccount:SEU_SA@agentspace-469418.iam.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+done
+```
+
+Em produção, o Cloud Run injeta o valor diretamente como variável de ambiente via `--update-secrets` no deploy (ver [Levando para o Cloud Run](#levando-para-o-cloud-run)) — o backend só lê `process.env.AZURE_CLIENT_SECRET`/`process.env.SESSION_JWT_SECRET`, sem chamar o Secret Manager. Em dev local não existe Cloud Run fazendo essa injeção, então o backend chama a API do Secret Manager sozinho, no boot (antes de aceitar qualquer requisição), usando a mesma ADC do [gcloud CLI](#gcloud-cli) e os IDs configurados em `AZURE_CLIENT_SECRET_ID`/`SESSION_JWT_SECRET_ID`.
+
+> **Antes de reiniciar o backend com essa versão:** enquanto `AZURE_TENANT_ID`/`AZURE_CLIENT_ID`/`AZURE_ALLOWED_GROUP_ID` não estiverem preenchidos e os secrets acima não existirem/não estiverem acessíveis pela SA, o backend falha já no boot (não sobe) — e como `requireAuth` protege `/api/iam` e `/api/gemini`, o painel fica inacessível até a configuração estar completa (ver checklist em [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md)).
 
 ---
 
@@ -139,7 +196,7 @@ Frontend e backend rodam em containers isolados — um Dockerfile multi-stage pa
 ### Requisitos
 
 - Docker e Docker Compose instalados.
-- A mesma configuração de credenciais do [Pré-requisitos](#pré-requisitos): `backend/credentials.json` e `backend/.env` já criados. Não é preciso ajustar `FRONTEND_BASE_URL` para o Compose: `docker-compose.yml` já sobrescreve essa variável para `http://localhost:8080` (a porta do container do frontend), independente do valor em `backend/.env` (usado pelo `npm run dev`, com o Vite em `localhost:5173`).
+- A mesma configuração dos [Pré-requisitos](#pré-requisitos): gcloud CLI instalado, `gcloud auth application-default login --impersonate-service-account=...` já rodado no host (o container não tem metadata server — lê a ADC do host via volume, ver abaixo), e `backend/.env` já criado. Não é preciso ajustar `FRONTEND_BASE_URL` para o Compose: `docker-compose.yml` já sobrescreve essa variável para `http://localhost:8080` (a porta do container do frontend), independente do valor em `backend/.env` (usado pelo `npm run dev`, com o Vite em `localhost:5173`).
 
 ### Subir tudo com um comando
 
@@ -152,7 +209,7 @@ docker compose up --build -d
 
 O container do frontend serve os arquivos estáticos do build (Vite) via nginx e faz proxy reverso de `/api/*` para o backend — o browser só fala com a porta 8080, então não é preciso configurar CORS nem apontar URL de API manualmente.
 
-O `docker-compose.yml` reaproveita o `backend/.env` já existente (via `env_file`) e monta `backend/credentials.json` como volume somente-leitura dentro do container — a chave da service account nunca é copiada para dentro da imagem.
+O `docker-compose.yml` reaproveita o `backend/.env` já existente (via `env_file`) e monta só o arquivo de ADC do host (`~/.config/gcloud/application_default_credentials.json`) como volume somente-leitura dentro do container — nenhuma chave de service account, de qualquer tipo, é copiada para dentro da imagem ou do container.
 
 Se o frontend precisar de um `VITE_GCP_PROJECT_ID` diferente do padrão, defina-o antes do build:
 
@@ -173,8 +230,8 @@ docker compose down
 # Backend
 docker build -t gcp-iam-manager-backend ./backend
 docker run -p 3001:3001 --env-file backend/.env \
-  -v $(pwd)/backend/credentials.json:/secrets/credentials.json:ro \
-  -e GOOGLE_APPLICATION_CREDENTIALS=/secrets/credentials.json \
+  -v $HOME/.config/gcloud/application_default_credentials.json:/secrets/adc.json:ro \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/secrets/adc.json \
   gcp-iam-manager-backend
 
 # Frontend
@@ -186,7 +243,16 @@ docker run -p 8080:8080 -e BACKEND_URL=http://host.docker.internal:3001 gcp-iam-
 
 Cada imagem já respeita o contrato do Cloud Run (escuta `$PORT`, stateless, roda como usuário não-root):
 
-- **Backend:** não leve `credentials.json` para produção — anexe uma service account diretamente ao serviço Cloud Run e remova `GOOGLE_APPLICATION_CREDENTIALS`; o Application Default Credentials resolve sozinho via metadata server.
+- **Backend:** nenhuma chave de service account é levada para produção — anexe a SA diretamente ao serviço Cloud Run (`--service-account`) e nunca defina `GOOGLE_APPLICATION_CREDENTIALS`; o ADC resolve sozinho via metadata server (ver [ADR 0007](docs/adr/0007-adc-e-secret-manager-para-credenciais.md)). Os dois segredos reais (`AZURE_CLIENT_SECRET`, `SESSION_JWT_SECRET`) são injetados via `--update-secrets`, lidos do Secret Manager pelo próprio Cloud Run — nunca via `--set-env-vars`, que ficaria em texto plano na configuração do serviço:
+
+  ```bash
+  gcloud run deploy gcp-iam-manager-backend \
+    --image=IMAGEM_DO_BACKEND \
+    --service-account=SEU_SA@agentspace-469418.iam.gserviceaccount.com \
+    --set-env-vars="GCP_PROJECT_ID=agentspace-469418,AZURE_TENANT_ID=...,AZURE_CLIENT_ID=...,AZURE_ALLOWED_GROUP_ID=...,FRONTEND_BASE_URL=https://gcp-admin.edglobo.com.br,BILLING_EXPORT_TABLE=..." \
+    --update-secrets="AZURE_CLIENT_SECRET=azure-client-secret-prod:latest,SESSION_JWT_SECRET=session-jwt-secret-prod:latest"
+  ```
+
 - **Frontend:** ao fazer deploy, defina a env var `BACKEND_URL` do serviço com a URL pública do backend no Cloud Run (ex.: `https://backend-xxxx-uc.a.run.app`) e passe `VITE_GCP_PROJECT_ID` como `--build-arg` no build da imagem.
 
 ---
@@ -330,15 +396,27 @@ Error: 403 The caller does not have permission
 
 ---
 
-### Backend retorna erro `ENOENT` na chave JSON
+### Backend falha no boot com `Could not load the default credentials`
 
 ```
-Error: ENOENT: no such file or directory, open './credentials.json'
+Error: Could not load the default credentials. Browse to https://cloud.google.com/docs/authentication/getting-started for more information.
 ```
 
-**Causa:** O arquivo `backend/credentials.json` não existe ou o caminho em `GOOGLE_APPLICATION_CREDENTIALS` está errado.
+**Causa:** Não existe ADC configurada no ambiente onde o backend está rodando — em dev local, geralmente porque `gcloud auth application-default login --impersonate-service-account=...` (ver [Pré-requisitos](#pré-requisitos)) nunca foi rodado, expirou, ou (no Docker Compose) o volume que monta `~/.config/gcloud/application_default_credentials.json` do host não encontrou o arquivo.
 
-**Solução:** Verifique se o arquivo existe em `backend/credentials.json` e que o `.env` aponta para ele corretamente.
+**Solução:** Rode `gcloud auth application-default login --impersonate-service-account=SEU_SA@agentspace-469418.iam.gserviceaccount.com` novamente. Se estiver usando Docker Compose, confirme que o comando foi rodado *no host*, não dentro do container, antes de subir os containers.
+
+---
+
+### Backend falha no boot com erro do Secret Manager
+
+```
+Error: 7 PERMISSION_DENIED: Permission 'secretmanager.versions.access' denied on resource ...
+```
+
+**Causa:** Só acontece em dev local (em produção o valor já chega pronto via `--update-secrets`, sem o backend chamar o Secret Manager) — a SA impersonada não tem `roles/secretmanager.secretAccessor` no secret referenciado por `AZURE_CLIENT_SECRET_ID`/`SESSION_JWT_SECRET_ID`, ou o secret não existe com esse nome.
+
+**Solução:** Confirme que os secrets existem (`gcloud secrets list`) e que a SA tem a role no secret específico — ver seção [Segredos no Secret Manager](#segredos-no-secret-manager).
 
 ---
 
@@ -406,7 +484,7 @@ ed-globo/
 │   │   ├── middleware/
 │   │   │   └── requireAuth.js        Valida o cookie de sessão nas rotas /api/*
 │   │   └── services/
-│   │       ├── gcpAuth.js            GoogleAuth (service account)
+│   │       ├── gcpAuth.js            GoogleAuth via ADC (sem chave estática — ver ADR 0007)
 │   │       ├── gcpClients.js         Clientes googleapis (crm, iam)
 │   │       ├── iamPolicyStore.js     getPolicy / setPolicy (policy v3)
 │   │       ├── principalProbe.js     Probe descartável de validação de principal
@@ -415,6 +493,7 @@ ed-globo/
 │   │       ├── msalClient.js         ConfidentialClientApplication (Entra ID)
 │   │       ├── graphGroupCheck.js    Checagem de grupo via Microsoft Graph (só no login)
 │   │       ├── sessionToken.js       Assina/valida o JWT de sessão do painel
+│   │       ├── secretManager.js      Resolve AZURE_CLIENT_SECRET/SESSION_JWT_SECRET no boot (env var já populada em prod, ou Secret Manager via API em dev — ver ADR 0007)
 │   │       └── auditLog.js           Log estruturado das ações mutáveis (operador/ação/alvo)
 │   └── .env.example
 └── frontend/
