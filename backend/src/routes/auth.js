@@ -24,8 +24,19 @@ const isProduction = () => process.env.NODE_ENV === 'production';
 // Express confie no cabeçalho X-Forwarded-Proto (ver app.set('trust proxy')
 // em app.js). Ambos os valores precisam estar cadastrados como Redirect URIs
 // válidos no App Registration do Entra ID (ver docs/sso-pedidos-time-ad.md).
+//
+// Usa X-Forwarded-Host (com fallback pro Host direto) em vez de req.get('host')
+// puro: no Cloud Run, o nginx do frontend precisa mandar o cabeçalho Host real
+// pro hostname do BACKEND (o front-end do Google roteia por Host/SNI entre os
+// serviços Cloud Run — um Host que não bate com o do backend cai num 404
+// genérico do Google, nunca chega aqui). O host original que o browser usou
+// (necessário pra montar este redirect_uri) vem à parte, em X-Forwarded-Host
+// — ver frontend/nginx/default.conf.template. Em dev via Vite não existe
+// X-Forwarded-Host (o proxy do Vite já reescreve o próprio Host pro alvo,
+// changeOrigin: true), então cai no fallback, que já é o valor certo.
 function buildRedirectUri(req) {
-  return `${req.protocol}://${req.get('host')}/auth/callback`;
+  const host = req.get('x-forwarded-host') || req.get('host');
+  return `${req.protocol}://${host}/auth/callback`;
 }
 
 function frontendUrl(path = '') {

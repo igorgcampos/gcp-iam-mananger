@@ -15,9 +15,22 @@ server {
     location /api/ {
         proxy_pass ${BACKEND_URL};
         proxy_http_version 1.1;
-        # $http_host (não $host): $host descarta a porta do Host original,
-        # o que quebra o redirect_uri derivado pelo backend (ver auth.js).
-        proxy_set_header Host $http_host;
+        # Obrigatório para BACKEND_URL https:// (Cloud Run): sem isso o nginx
+        # não envia SNI no handshake TLS de saída, e o front-end do Google
+        # (que roteia por SNI entre os vários serviços Cloud Run atrás do
+        # mesmo IP/certificado wildcard) não sabe pra qual serviço mandar a
+        # requisição — cai na página de erro 404 genérica do Google, nunca
+        # chega no backend. Sem efeito quando BACKEND_URL é http:// (Docker
+        # Compose, rede interna), mas inofensivo deixar sempre ligado.
+        proxy_ssl_server_name on;
+        # Host precisa ser o do BACKEND (não sobrescrever = nginx usa
+        # $proxy_host, derivado da própria BACKEND_URL) — o front-end do
+        # Google também roteia por Host, igual ao SNI acima; se o Host que
+        # chega for o do frontend (o do browser), cai no mesmo 404 genérico
+        # do Google mesmo com SNI certo. O host original do browser (que o
+        # backend precisa pra montar o redirect_uri — ver auth.js) vai à
+        # parte, em X-Forwarded-Host.
+        proxy_set_header X-Forwarded-Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -29,7 +42,9 @@ server {
     location /auth/ {
         proxy_pass ${BACKEND_URL};
         proxy_http_version 1.1;
-        proxy_set_header Host $http_host;
+        # Ver comentários equivalentes em location /api/ acima.
+        proxy_ssl_server_name on;
+        proxy_set_header X-Forwarded-Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

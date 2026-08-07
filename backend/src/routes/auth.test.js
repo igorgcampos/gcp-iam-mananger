@@ -120,6 +120,26 @@ describe('auth routes', () => {
         redirectUri: 'http://localhost:8080/auth/callback',
       }));
     });
+
+    test('prioriza X-Forwarded-Host sobre o Host quando os dois vêm preenchidos', async () => {
+      // Regressão: no Cloud Run, o nginx do frontend precisa mandar Host =
+      // hostname do backend (senão o front-end do Google não roteia a
+      // requisição — cai num 404 genérico, nunca chega no Express). O host
+      // original do browser (necessário pro redirect_uri) chega à parte, em
+      // X-Forwarded-Host — ver frontend/nginx/default.conf.template. Sem essa
+      // priorização, o redirect_uri sairia com o hostname do backend em vez
+      // do domínio público do painel.
+      mockGetAuthCodeUrl.mockResolvedValue('https://login.microsoftonline.com/tenant-teste/oauth2/v2.0/authorize?...');
+
+      await request(app)
+        .get('/auth/login')
+        .set('Host', 'gcp-iam-manager-backend-yhs7dusmaa-uk.a.run.app')
+        .set('X-Forwarded-Host', 'gcp-admin.edglobo.com.br');
+
+      expect(mockGetAuthCodeUrl).toHaveBeenCalledWith(expect.objectContaining({
+        redirectUri: 'http://gcp-admin.edglobo.com.br/auth/callback',
+      }));
+    });
   });
 
   describe('GET /auth/callback', () => {
