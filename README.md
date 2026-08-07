@@ -297,6 +297,19 @@ Mostra o gasto do projeto `agentspace-469418` no mês corrente até hoje, dividi
 
 **Categorização:** as listas `GEMINI_SERVICES`/`INFRA_SERVICES` ficam hardcoded em `backend/src/services/billingService.js` — não há heurística automática. Se "Não categorizado" aparecer com um valor inesperado, rode `npm run billing:services` (dentro de `backend/`, com credenciais configuradas) para ver o breakdown real de serviços de billing do projeto e decidir se algum precisa entrar numa das listas.
 
+#### Fluxo de atualização (refresh manual e automático)
+
+Dois mecanismos completamente diferentes ficam por trás do mesmo botão "Atualizar" — vale entender a diferença:
+
+- **Automático:** ao abrir a página, o frontend busca o resumo (com spinner) e depois passa a repetir a mesma chamada a cada **4 horas** (`BILLING_POLL_INTERVAL_MS`), em segundo plano e sem spinner — o usuário não percebe.
+- **Manual:** clicar em "Atualizar" dispara a mesma chamada, só que com spinner visível. **O clique não força uma nova consulta ao BigQuery** — ele bate no mesmo endpoint, que aplica a mesma regra de cache do backend.
+
+Em ambos os casos, quem decide se vai ao BigQuery ou devolve o cache é o **backend**, não o clique em si: se a última consulta real foi há menos de 4h (`CACHE_TTL_MS`), a resposta vem do cache em memória, quase instantânea. Só quando o cache expira (>4h) é que uma consulta nova é disparada — e mesmo essa consulta nova não traz dado mais recente do que a última vez que o próprio Google regravou o Billing Export, que só acontece **1x por dia** (isso é uma característica do BigQuery Billing Export, fora do controle desta aplicação — ver [ADR 0006](docs/adr/0006-billing-export-como-fonte-de-custos.md)).
+
+![Diagrama do fluxo de atualização de Custos](docs/billing-fluxo-refresh.svg)
+
+_Fonte editável: [`docs/billing-fluxo-refresh.mmd`](docs/billing-fluxo-refresh.mmd) (sintaxe [Mermaid](https://mermaid.js.org/), renderizado com `npx @mermaid-js/mermaid-cli`)._
+
 ---
 
 ## Arquitetura

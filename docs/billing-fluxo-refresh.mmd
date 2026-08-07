@@ -1,0 +1,51 @@
+sequenceDiagram
+    autonumber
+    actor Operador
+    participant Frontend as Frontend<br/>(React)
+    participant Backend as Backend<br/>(Express)
+    participant BQ as BigQuery<br/>(Billing Export)
+
+    rect rgb(240, 248, 255)
+    Note over Operador,BQ: Automático — ao abrir a página "Custos", depois a cada 4h em segundo plano
+    Operador->>Frontend: Abre a página Custos
+    Frontend->>Frontend: mostra spinner (só nesta 1ª carga)
+    Frontend->>Backend: GET /api/billing/summary
+    Backend->>Backend: cache em memória<br/>ainda válido (menos de 4h desde a última consulta)?
+    alt cache válido
+        Backend-->>Frontend: resumo cacheado (sem tocar o BigQuery)
+    else cache vazio ou expirado
+        Backend->>BQ: query do mês corrente<br/>GROUP BY service, sku
+        BQ-->>Backend: linhas de custo por Serviço/SKU
+        Backend->>Backend: categorizeCosts()<br/>agrupa Gemini / Infra / Não categorizado<br/>+ items por Serviço → SKU
+        Backend->>Backend: grava resultado em cache (TTL 4h)
+        Backend-->>Frontend: resumo + items
+    end
+    Frontend-->>Operador: cards preenchidos
+
+    loop a cada 4h (BILLING_POLL_INTERVAL_MS)
+        Frontend->>Backend: GET /api/billing/summary (silencioso, sem spinner)
+        Backend->>Backend: mesma decisão de cache acima
+        Backend-->>Frontend: resumo (cacheado ou recalculado)
+        Frontend-->>Operador: cards atualizados sem o usuário perceber
+    end
+    end
+
+    rect rgb(255, 250, 230)
+    Note over Operador,BQ: Manual — clique no botão "Atualizar"
+    Operador->>Frontend: Clica "Atualizar"
+    Frontend->>Frontend: mostra spinner (loading = true)
+    Frontend->>Backend: GET /api/billing/summary
+    Backend->>Backend: mesma decisão de cache —<br/>o clique NÃO força ida ao BigQuery
+    alt cache ainda válido
+        Backend-->>Frontend: resumo cacheado (resposta quase instantânea)
+    else cache expirado
+        Backend->>BQ: nova consulta (mesma query acima)
+        BQ-->>Backend: linhas de custo
+        Backend->>Backend: categorizeCosts() + atualiza cache
+        Backend-->>Frontend: resumo recalculado
+    end
+    Frontend->>Frontend: esconde spinner
+    Frontend-->>Operador: cards atualizados + "Atualizado: HH:MM:SS"
+    end
+
+    Note over Backend,BQ: O Billing Export do próprio GCP só é regravado 1x/dia pelo Google —<br/>nem o clique manual nem consultas mais frequentes trazem dado mais<br/>recente que isso (fora do controle da aplicação, ver ADR 0006)
