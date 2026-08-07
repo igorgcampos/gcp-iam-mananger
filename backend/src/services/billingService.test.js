@@ -90,6 +90,16 @@ describe('getBillingSummary', () => {
     expect(queryMock).toHaveBeenCalledTimes(1);
     expect(a).toEqual(b);
   });
+
+  test('usa "Outros" quando sku.description vem nulo do BigQuery', async () => {
+    queryMock.mockResolvedValue(mockQueryResult([
+      { service: 'Cloud Run', sku: null, cost: 5, currency: 'BRL' },
+    ]));
+
+    const summary = await getBillingSummary();
+
+    expect(summary.items.infra).toEqual([{ service: 'Cloud Run', cost: 5, skus: [{ sku: 'Outros', cost: 5 }] }]);
+  });
 });
 
 describe('categorizeCosts', () => {

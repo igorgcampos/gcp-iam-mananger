@@ -76,7 +76,7 @@ function parseRows(data) {
     const obj = {};
     row.f.forEach((cell, i) => { obj[fields[i]] = cell.v; });
     return {
-      service: obj.service, sku: obj.sku, cost: parseFloat(obj.cost) || 0, currency: obj.currency,
+      service: obj.service, sku: obj.sku ?? 'Outros', cost: parseFloat(obj.cost) || 0, currency: obj.currency,
     };
   });
 }
@@ -88,7 +88,7 @@ async function queryCostByService() {
   const query = `
     SELECT
       service.description AS service,
-      sku.description AS sku,
+      IFNULL(sku.description, 'Outros') AS sku,
       SUM(cost) + IFNULL(SUM((SELECT SUM(c.amount) FROM UNNEST(credits) AS c)), 0) AS cost,
       ANY_VALUE(currency) AS currency
     FROM \`${table}\`
