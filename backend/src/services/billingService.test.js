@@ -1,4 +1,4 @@
-const { categorizeCosts } = require('./billingService');
+const { categorizeCosts, GEMINI_SERVICES } = require('./billingService');
 
 const OLD_ENV = process.env;
 
@@ -55,6 +55,21 @@ describe('getBillingSummary', () => {
     const [call] = queryMock.mock.calls[0];
     expect(call.projectId).toBe('agentspace-469418');
     expect(call.requestBody.queryParameters[0].parameterValue.value).toBe('agentspace-469418');
+  });
+
+  test('a query passa GEMINI_SERVICES como parâmetro, pra pegar assinaturas sem project.id', async () => {
+    queryMock.mockResolvedValue(mockQueryResult([{
+      service: 'Cloud Run', sku: 'CPU Allocation Time', cost: 1, currency: 'BRL',
+    }]));
+
+    await getBillingSummary();
+
+    const [call] = queryMock.mock.calls[0];
+    const geminiParam = call.requestBody.queryParameters.find((p) => p.name === 'geminiServices');
+    expect(geminiParam.parameterType).toEqual({ type: 'ARRAY', arrayType: { type: 'STRING' } });
+    expect(geminiParam.parameterValue.arrayValues).toEqual(
+      GEMINI_SERVICES.map((v) => ({ value: v }))
+    );
   });
 
   test('usa o cache em chamadas subsequentes dentro do TTL', async () => {

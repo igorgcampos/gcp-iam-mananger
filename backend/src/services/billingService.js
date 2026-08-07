@@ -92,7 +92,16 @@ async function queryCostByService() {
       SUM(cost) + IFNULL(SUM((SELECT SUM(c.amount) FROM UNNEST(credits) AS c)), 0) AS cost,
       ANY_VALUE(currency) AS currency
     FROM \`${table}\`
-    WHERE project.id = @projectId
+    WHERE (
+        project.id = @projectId
+        -- Assinaturas Gemini/Agentspace (ex: "Gemini Enterprise Standard: Subscription
+        -- - one year term") às vezes vêm faturadas no nível da Billing Account, com
+        -- project.id nulo, em vez de atreladas a um projeto específico — diferente do
+        -- consumo normal (ex: "Agentspace Enterprise Plus"), que tem project.id
+        -- preenchido. Sem esta cláusula extra, essas assinaturas somem silenciosamente
+        -- da categoria Gemini (ver CONTEXT.md, "Custo Gemini").
+        OR (project.id IS NULL AND service.description IN UNNEST(@geminiServices))
+      )
       AND usage_start_time >= TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
     GROUP BY service, sku
   `;
@@ -105,6 +114,11 @@ async function queryCostByService() {
       parameterMode: 'NAMED',
       queryParameters: [
         { name: 'projectId', parameterType: { type: 'STRING' }, parameterValue: { value: projectId } },
+        {
+          name: 'geminiServices',
+          parameterType: { type: 'ARRAY', arrayType: { type: 'STRING' } },
+          parameterValue: { arrayValues: GEMINI_SERVICES.map((v) => ({ value: v })) },
+        },
       ],
     },
   });

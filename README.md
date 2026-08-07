@@ -303,6 +303,8 @@ Mostra o gasto do projeto `agentspace-469418` no mês corrente até hoje, dividi
 
 **Categorização:** as listas `GEMINI_SERVICES`/`INFRA_SERVICES` ficam hardcoded em `backend/src/services/billingService.js` — não há heurística automática. Se "Não categorizado" aparecer com um valor inesperado, rode `npm run billing:services` (dentro de `backend/`, com credenciais configuradas) para ver o breakdown real de serviços de billing do projeto e decidir se algum precisa entrar numa das listas.
 
+**Exceção — assinaturas sem `project.id`:** nem toda linha de custo Gemini tem `project.id = agentspace-469418`. Assinaturas anuais (SKU `"...Subscription - one year term"`) às vezes são faturadas no nível da Billing Account inteira em vez de atreladas a um projeto — ex: `Gemini Enterprise Standard` é assim, enquanto `Agentspace Enterprise Plus` tem `project.id` preenchido normalmente. A query inclui essas linhas explicitamente, mas só para os Serviços da lista `GEMINI_SERVICES` (Infra e Não Categorizado continuam estritamente por projeto) — ver [ADR 0008](docs/adr/0008-custo-gemini-inclui-assinaturas-sem-project-id.md) para o porquê e os riscos aceitos dessa decisão.
+
 #### Fluxo de atualização (refresh manual e automático)
 
 Dois mecanismos completamente diferentes ficam por trás do mesmo botão "Atualizar" — vale entender a diferença:

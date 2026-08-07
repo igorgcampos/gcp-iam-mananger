@@ -63,11 +63,12 @@ Recurso do GCP, existente no nível da organização, ao qual projetos são vinc
 _Avoid_: Conta de faturamento (ok em português na UI), conta de billing
 
 **Custo do Projeto**:
-O total gasto, dentro da Billing Account "Projetos Editora Globo", atribuível ao projeto `agentspace-469418`. Escopo da página de Billing: não inclui outros projetos nem as outras 2 Billing Accounts da organização. Calculado sempre como `Custo Gemini + Custo de Infra + Não Categorizado` — as três parcelas sempre somam o total, nunca deixam resto escondido.
+O total gasto, dentro da Billing Account "Projetos Editora Globo", atribuível ao projeto `agentspace-469418` **mais as assinaturas Gemini/Agentspace cobradas no nível da Billing Account** (ver exceção no Custo Gemini, abaixo) — na prática, o gasto que este painel existe para vigiar, mesmo quando uma parcela dele não carrega `project.id`. Escopo da página de Billing: não inclui outros projetos nem as outras 2 Billing Accounts da organização. Calculado sempre como `Custo Gemini + Custo de Infra + Não Categorizado` — as três parcelas sempre somam o total, nunca deixam resto escondido.
 _Avoid_: Custo total (ambíguo — total de quê), gasto do projeto
 
 **Custo Gemini**:
 Subcategoria do Custo do Projeto: soma dos Serviços cujo `service.description` está numa lista explícita e nomeada de serviços de billing relacionados a Gemini/Agentspace (confirmado via GCP Billing Console: `"Vertex AI Search"` — licenças Gemini Enterprise/Agentspace Enterprise Plus — e `"Vertex AI"` — consumo de modelo/LLM subjacente). É custo de *consumo do provedor*, distinto da **Licença** (que é o vínculo de atribuição a um usuário, já definida acima) — o Custo Gemini é o valor em R$ cobrado pela Billing Account por esse consumo, não o registro de quem está usando a vaga.
+_Exceção de `project.id`_: nem toda linha de Custo Gemini tem `project.id = agentspace-469418`. Assinaturas anuais (SKU tipo `"...Subscription - one year term"`) às vezes são faturadas no nível da Billing Account inteira, com `project.id` nulo — ex: `"Gemini Enterprise Standard"` é assim, enquanto `"Agentspace Enterprise Plus"` tem `project.id` preenchido normalmente. A query inclui explicitamente linhas com `project.id IS NULL` desde que o Serviço esteja na lista Gemini (ver `queryCostByService` em `backend/src/services/billingService.js`) — decisão registrada, não filtra por engano nem é heurística automática; Infra e Não Categorizado continuam estritamente por `project.id = agentspace-469418`.
 _Avoid_: Custo de licenças (mistura com o conceito de Licença)
 
 **Custo de Infra**:
