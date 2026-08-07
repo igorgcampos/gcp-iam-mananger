@@ -48,8 +48,16 @@ export default function BillingCategoryCard({
         )}
       </Space>
 
-      <div style={{ marginTop: 12, display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <Statistic value={value} valueStyle={{ fontSize: 28, fontWeight: 800, color: '#192645' }} />
+      <div style={{
+        marginTop: 12, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
+      }}
+      >
+        <Statistic
+          value={value}
+          valueStyle={{
+            fontSize: 28, fontWeight: 800, color: '#192645', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+          }}
+        />
         {hint && <Text style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8' }}>{hint}</Text>}
       </div>
 
@@ -61,15 +69,29 @@ export default function BillingCategoryCard({
             <Space direction="vertical" size={10} style={{ width: '100%' }}>
               {items.map((service) => (
                 <div key={service.service}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Text strong style={{ fontSize: 12 }}>{service.service}</Text>
-                    <Text strong style={{ fontSize: 12 }}>{formatCurrency(service.cost, currency)}</Text>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <Text strong style={{ fontSize: 12, flex: '1 1 auto', minWidth: 0 }}>{service.service}</Text>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 12, flexShrink: 0, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {formatCurrency(service.cost, currency)}
+                    </Text>
                   </div>
                   <Space direction="vertical" size={2} style={{ width: '100%', marginTop: 4, paddingLeft: 12 }}>
                     {service.skus.map((sku) => (
-                      <div key={sku.sku} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Text type="secondary" style={{ fontSize: 12 }}>{sku.sku}</Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>{formatCurrency(sku.cost, currency)}</Text>
+                      <div key={sku.sku} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                        <Text type="secondary" style={{ fontSize: 12, flex: '1 1 auto', minWidth: 0 }}>{sku.sku}</Text>
+                        <Text
+                          type="secondary"
+                          style={{
+                            fontSize: 12, flexShrink: 0, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
+                          {formatCurrency(sku.cost, currency)}
+                        </Text>
                       </div>
                     ))}
                   </Space>

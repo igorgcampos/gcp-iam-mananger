@@ -25,7 +25,7 @@ export default function BillingPage({
               <Title level={4} style={{ margin: 0 }}>Custos</Title>
             </Space>
             <Text type="secondary" style={{ fontSize: 13 }}>
-              Gasto do projeto {import.meta.env.VITE_GCP_PROJECT_ID} no mês corrente, via BigQuery Billing Export.
+              Gasto do projeto {import.meta.env.VITE_GCP_PROJECT_ID} no mês corrente.
             </Text>
           </Space>
           <Space wrap>
@@ -42,7 +42,10 @@ export default function BillingPage({
 
         <Spin spinning={loading}>
           {summary ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, alignItems: 'start',
+            }}
+            >
               <BillingCategoryCard
                 icon={<WalletOutlined />}
                 iconBg="#eff6ff"

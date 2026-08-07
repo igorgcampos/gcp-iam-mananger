@@ -759,7 +759,7 @@ export default function BillingPage({
               <Title level={4} style={{ margin: 0 }}>Custos</Title>
             </Space>
             <Text type="secondary" style={{ fontSize: 13 }}>
-              Gasto do projeto agentspace-469418 no mês corrente, via BigQuery Billing Export.
+              Gasto do projeto agentspace-469418 no mês corrente.
             </Text>
           </Space>
           <Space wrap>
