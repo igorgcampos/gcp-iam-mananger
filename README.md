@@ -408,6 +408,24 @@ Error: Could not load the default credentials. Browse to https://cloud.google.co
 
 ---
 
+### Backend falha no boot com `EACCES: permission denied, open '/secrets/adc.json'` (Docker Compose)
+
+```
+Falha ao resolver segredos no boot: Falha ao buscar o secret "..." no Secret Manager: EACCES: permission denied, open '/secrets/adc.json'
+```
+
+**Causa:** O arquivo ADC (`~/.config/gcloud/application_default_credentials.json`) no host tem permissão restritiva (ex.: `600`). O container roda como um usuário non-root (UID 1001, `nodejs`), diferente do seu usuário no host. Quando o arquivo é montado via `docker compose` (bind-mount), as permissões do host são preservadas — se o arquivo tem `600`, só o dono consegue ler, e o UID 1001 não é o dono, resultando em `EACCES`.
+
+**Solução:** Altere a permissão do arquivo ADC para legível por outros:
+
+```bash
+chmod 644 ~/.config/gcloud/application_default_credentials.json
+```
+
+Isso é seguro em máquinas de dev single-user — o arquivo ainda é protegido contra leitura remota (não sai do host), e fica legível pelo container. Em produção (Cloud Run), não há esse problema — a SA é anexada ao serviço, não é um arquivo montado.
+
+---
+
 ### Backend falha no boot com erro do Secret Manager
 
 ```
