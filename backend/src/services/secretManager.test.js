@@ -56,6 +56,15 @@ describe('secretManager', () => {
     ).rejects.toThrow(/AZURE_CLIENT_SECRET_ID/);
   });
 
+  test('lança erro claro quando GCP_PROJECT_ID não está configurado', async () => {
+    process.env.AZURE_CLIENT_SECRET_ID = 'azure-client-secret-dev';
+    delete process.env.GCP_PROJECT_ID;
+
+    await expect(
+      resolveSecret('AZURE_CLIENT_SECRET', 'AZURE_CLIENT_SECRET_ID'),
+    ).rejects.toThrow(/GCP_PROJECT_ID/);
+  });
+
   test('lança erro claro quando a busca no Secret Manager falha', async () => {
     process.env.AZURE_CLIENT_SECRET_ID = 'azure-client-secret-dev';
     process.env.GCP_PROJECT_ID = 'agentspace-469418';
@@ -64,5 +73,29 @@ describe('secretManager', () => {
     await expect(
       resolveSecret('AZURE_CLIENT_SECRET', 'AZURE_CLIENT_SECRET_ID'),
     ).rejects.toThrow(/Falha ao buscar o secret/);
+  });
+
+  test('resolveAppSecrets resolve AZURE_CLIENT_SECRET e SESSION_JWT_SECRET sem trocar os valores', async () => {
+    delete process.env.SESSION_JWT_SECRET;
+    process.env.AZURE_CLIENT_SECRET_ID = 'azure-client-secret-dev';
+    process.env.SESSION_JWT_SECRET_ID = 'session-jwt-secret-dev';
+    process.env.GCP_PROJECT_ID = 'agentspace-469418';
+    mockAccessSecretVersion.mockImplementation(({ name }) => {
+      if (name.includes('azure-client-secret-dev')) {
+        return Promise.resolve([{ payload: { data: Buffer.from('valor-azure') } }]);
+      }
+      if (name.includes('session-jwt-secret-dev')) {
+        return Promise.resolve([{ payload: { data: Buffer.from('valor-jwt') } }]);
+      }
+      throw new Error(`nome de secret inesperado: ${name}`);
+    });
+
+    // eslint-disable-next-line global-require
+    const { resolveAppSecrets } = require('./secretManager');
+    await resolveAppSecrets();
+
+    expect(process.env.AZURE_CLIENT_SECRET).toBe('valor-azure');
+    expect(process.env.SESSION_JWT_SECRET).toBe('valor-jwt');
+    expect(process.env.AZURE_CLIENT_SECRET).not.toBe(process.env.SESSION_JWT_SECRET);
   });
 });
