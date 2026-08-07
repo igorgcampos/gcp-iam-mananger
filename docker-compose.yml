@@ -17,12 +17,12 @@ services:
       # the frontend is the nginx container on 8080, not localhost:5173.
       - FRONTEND_BASE_URL=http://localhost:8080
     volumes:
-      # Monta o arquivo ADC do host — importante: o backend roda como non-root (UID 1001),
-      # então o arquivo ADC precisa ter permissão 644 ou superior (readable por outros).
-      # Se o arquivo ADC tiver 600 (padrão do `gcloud auth application-default login`),
-      # o container não conseguirá ler e falhará com EACCES. Solução: rode
-      # `chmod 644 ${HOME}/.config/gcloud/application_default_credentials.json` no host.
-      # Ver seção Troubleshooting do README.
+      # Monta o arquivo ADC do host — importante: o backend roda como non-root (UID 1001).
+      # Se o arquivo tiver permissão 600 (padrão do `gcloud auth application-default login`),
+      # o container não conseguirá ler e falhará com EACCES. Solução:
+      # `chgrp 1001 ~/.config/gcloud/application_default_credentials.json`
+      # `chmod 640 ~/.config/gcloud/application_default_credentials.json`
+      # Ver seção Troubleshooting do README para detalhes.
       - ${HOME}/.config/gcloud/application_default_credentials.json:/secrets/adc.json:ro
     ports:
       - "3001:3001"

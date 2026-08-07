@@ -408,21 +408,24 @@ Error: Could not load the default credentials. Browse to https://cloud.google.co
 
 ---
 
-### Backend falha no boot com `EACCES: permission denied, open '/secrets/adc.json'` (Docker Compose)
+### Backend falha no boot com `EACCES: permission denied, open '/secrets/adc.json'` (Docker)
 
 ```
 Falha ao resolver segredos no boot: Falha ao buscar o secret "..." no Secret Manager: EACCES: permission denied, open '/secrets/adc.json'
 ```
 
-**Causa:** O arquivo ADC (`~/.config/gcloud/application_default_credentials.json`) no host tem permissão restritiva (ex.: `600`). O container roda como um usuário non-root (UID 1001, `nodejs`), diferente do seu usuário no host. Quando o arquivo é montado via `docker compose` (bind-mount), as permissões do host são preservadas — se o arquivo tem `600`, só o dono consegue ler, e o UID 1001 não é o dono, resultando em `EACCES`.
+**Causa:** O arquivo ADC (`~/.config/gcloud/application_default_credentials.json`) no host tem permissão restritiva (ex.: `600`). O container roda como um usuário non-root (UID 1001, `nodejs`), diferente do seu usuário no host. Quando o arquivo é montado via bind-mount (em `docker compose` ou `docker run -v`), as permissões do host são preservadas — se o arquivo tem `600`, só o dono consegue ler, e o UID 1001 não é o dono, resultando em `EACCES`.
 
-**Solução:** Altere a permissão do arquivo ADC para legível por outros:
+**Solução:** Altere as permissões do arquivo ADC para permitir leitura pelo grupo do container:
 
 ```bash
-chmod 644 ~/.config/gcloud/application_default_credentials.json
+chgrp 1001 ~/.config/gcloud/application_default_credentials.json
+chmod 640 ~/.config/gcloud/application_default_credentials.json
 ```
 
-Isso é seguro em máquinas de dev single-user — o arquivo ainda é protegido contra leitura remota (não sai do host), e fica legível pelo container. Em produção (Cloud Run), não há esse problema — a SA é anexada ao serviço, não é um arquivo montado.
+Isso dá acesso de leitura apenas ao grupo `nodejs` (GID 1001) do container, sem tornar o arquivo legível por qualquer usuário da máquina. Em produção (Cloud Run), não há esse problema — a SA é anexada ao serviço, não é um arquivo montado.
+
+**Nota:** Rodar `gcloud auth application-default login` novamente reseta a permissão do arquivo para `600` — se isso acontecer, repita os comandos de `chgrp` e `chmod` acima.
 
 ---
 
