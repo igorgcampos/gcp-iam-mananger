@@ -285,7 +285,13 @@ Exibe as subscriptions ativas (total vs. atribuído por tier) e a lista completa
 
 **Remover:** desatribui a licença, liberando o slot para outro usuário.
 
-Ambas as telas fazem polling a cada **30 segundos** e têm botão de refresh manual.
+Ambas as telas fazem polling automático a cada **3 minutos** (`BACKGROUND_POLL_INTERVAL_MS`) e têm botão de refresh manual.
+
+#### Fluxo de atualização — sem cache, diferente da tela Custos
+
+Ao contrário da tela Custos (ver abaixo), **IAM e Gemini não têm nenhuma camada de cache no backend**. `iamService.listUsers()` chama `crm.projects.getIamPolicy()` direto, e `geminiService.listLicenseConfigs()`/`listUserLicenses()` chamam a Discovery Engine API direto via axios — toda vez, sem guardar nada em memória.
+
+Isso significa que tanto o polling automático (a cada 3 minutos) quanto o clique manual em "Atualizar" fazem exatamente a mesma coisa: disparam uma chamada nova e sempre fresca à API do Google. Não existe a distinção "cache válido vs. expirado" da tela Custos — aqui não há cache pra decidir nada, porque IAM e licenças podem mudar a qualquer momento e o custo de sempre buscar o dado real é baixo (ao contrário do BigQuery, que tem custo por consulta e só atualiza 1x/dia).
 
 ### Tela Custos
 
