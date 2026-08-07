@@ -67,16 +67,24 @@ O total gasto, dentro da Billing Account "Projetos Editora Globo", atribuível a
 _Avoid_: Custo total (ambíguo — total de quê), gasto do projeto
 
 **Custo Gemini**:
-Subcategoria do Custo do Projeto: soma dos SKUs cujo `service.description` está numa lista explícita e nomeada de serviços de billing relacionados a Gemini/Agentspace (confirmado via GCP Billing Console: `"Vertex AI Search"` — licenças Gemini Enterprise/Agentspace Enterprise Plus — e `"Vertex AI"` — consumo de modelo/LLM subjacente). É custo de *consumo do provedor*, distinto da **Licença** (que é o vínculo de atribuição a um usuário, já definida acima) — o Custo Gemini é o valor em R$ cobrado pela Billing Account por esse consumo, não o registro de quem está usando a vaga.
+Subcategoria do Custo do Projeto: soma dos Serviços cujo `service.description` está numa lista explícita e nomeada de serviços de billing relacionados a Gemini/Agentspace (confirmado via GCP Billing Console: `"Vertex AI Search"` — licenças Gemini Enterprise/Agentspace Enterprise Plus — e `"Vertex AI"` — consumo de modelo/LLM subjacente). É custo de *consumo do provedor*, distinto da **Licença** (que é o vínculo de atribuição a um usuário, já definida acima) — o Custo Gemini é o valor em R$ cobrado pela Billing Account por esse consumo, não o registro de quem está usando a vaga.
 _Avoid_: Custo de licenças (mistura com o conceito de Licença)
 
 **Custo de Infra**:
-Subcategoria do Custo do Projeto: soma dos SKUs cujo `service.description` está numa lista explícita e nomeada de serviços de infraestrutura que rodam esta própria aplicação (candidatos: `Cloud Run`, `Artifact Registry`, `Cloud Logging`, `BigQuery`). Contraparte do Custo Gemini — juntos, mais o Não Categorizado, formam o Custo do Projeto. Inclui, por natureza recursiva, o próprio custo das queries que a aplicação roda contra o `billing_standard` (elas rodam no projeto `agentspace-469418`, então aparecem como SKU `BigQuery` na tabela no dia seguinte — nenhuma instrumentação própria é necessária).
+Subcategoria do Custo do Projeto: soma dos Serviços cujo `service.description` está numa lista explícita e nomeada de serviços de infraestrutura que rodam esta própria aplicação (candidatos: `Cloud Run`, `Artifact Registry`, `Cloud Logging`, `BigQuery`). Contraparte do Custo Gemini — juntos, mais o Não Categorizado, formam o Custo do Projeto. Inclui, por natureza recursiva, o próprio custo das queries que a aplicação roda contra o `billing_standard` (elas rodam no projeto `agentspace-469418`, então aparecem como Serviço `BigQuery` na tabela no dia seguinte — nenhuma instrumentação própria é necessária).
 _Avoid_: Custo GCP ADMIN (nome do app, não da categoria — confunde com o card de UI), custo de aplicação (ambíguo com Custo do Projeto)
 
 **Não Categorizado**:
-Subcategoria do Custo do Projeto: soma dos SKUs cujo `service.description` não está em nenhuma das listas de Custo Gemini nem Custo de Infra. Existe para garantir que a soma das três parcelas sempre feche com o Custo do Projeto — é o alerta natural de que surgiu um serviço novo que precisa ser classificado.
+Subcategoria do Custo do Projeto: soma dos Serviços cujo `service.description` não está em nenhuma das listas de Custo Gemini nem Custo de Infra. Existe para garantir que a soma das três parcelas sempre feche com o Custo do Projeto — é o alerta natural de que surgiu um serviço novo que precisa ser classificado.
 _Avoid_: Outros (usar em UI é ok, mas no glossário o nome é Não Categorizado — "Outros" é ambíguo com "outros projetos")
+
+**Serviço** (`service.description`):
+Campo do Billing Export que identifica o produto GCP cobrado (ex: `"Vertex AI"`, `"Cloud Run"`) — é o nível de granularidade usado para classificar cada linha de custo em Custo Gemini, Custo de Infra ou Não Categorizado (ver `GEMINI_SERVICES`/`INFRA_SERVICES` em `backend/src/services/billingService.js`). Mais grosso que **SKU**: um Serviço agrupa vários SKUs.
+_Avoid_: SKU (é outro campo, mais granular — ver **SKU**)
+
+**SKU** (`sku.description`):
+Campo do Billing Export mais granular que **Serviço** — identifica o item de cobrança específico dentro de um Serviço (ex: dentro do Serviço `"Vertex AI Search"`, SKUs distintos por tipo de uso). Cada linha do Billing Export tem exatamente um Serviço e um SKU. Usado no drill-down por card da página de Billing: ao expandir um card de categoria, a lista exibida chega ao nível de SKU, agrupada em dois níveis (Serviço, e dentro de cada um os SKUs dele), preservando a categorização (Gemini/Infra/Não Categorizado) que continua sendo feita por Serviço.
+_Avoid_: usar "SKU" para o que na verdade é Serviço (confusão histórica deste glossário — corrigida nesta entrada)
 
 **Billing Export (Standard usage cost)**:
 Mecanismo do GCP, já habilitado na Billing Account "Projetos Editora Globo", que grava diariamente o custo por SKU de todos os projetos da Billing Account (71 no momento desta decisão) numa tabela do BigQuery: `infra-bi-355620.billing_standard.gcp_billing_export_v1_01779C_55AF20_FD92F6` — o sufixo do nome da tabela é o ID da Billing Account, não de um projeto. É a fonte de dados de toda a página de Billing; consultada diretamente (schema padrão do Google), sem depender das tabelas/views internas de FinOps (`tbCusto*`, `vwResultadoMes*`) que outro time mantém no mesmo dataset. Distinto de **Detailed usage cost** (outro tipo de export, desabilitado, que adicionaria granularidade por recurso individual — não usado por esta feature).
