@@ -427,6 +427,10 @@ Isso dá acesso de leitura apenas ao grupo `nodejs` (GID 1001) do container, sem
 
 **Nota:** Rodar `gcloud auth application-default login` novamente reseta a permissão do arquivo para `600` — se isso acontecer, repita os comandos de `chgrp` e `chmod` acima.
 
+**Se `chgrp 1001` falhar com `Operation not permitted`:** O seu usuário não pertence ao grupo GID 1001 no host. Há duas alternativas:
+- **Com sudo** (mais seguro): `sudo chgrp 1001 ~/.config/gcloud/application_default_credentials.json && sudo chmod 640 ~/.config/gcloud/application_default_credentials.json`
+- **Sem sudo** (fallback simples): `chmod 644 ~/.config/gcloud/application_default_credentials.json` — torna o arquivo legível por qualquer usuário da máquina, aceitável em laptop de dev single-user.
+
 ---
 
 ### Backend falha no boot com erro do Secret Manager

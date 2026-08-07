@@ -19,9 +19,10 @@ services:
     volumes:
       # Monta o arquivo ADC do host — importante: o backend roda como non-root (UID 1001).
       # Se o arquivo tiver permissão 600 (padrão do `gcloud auth application-default login`),
-      # o container não conseguirá ler e falhará com EACCES. Solução:
+      # o container não conseguirá ler e falhará com EACCES. Solução preferida:
       # `chgrp 1001 ~/.config/gcloud/application_default_credentials.json`
       # `chmod 640 ~/.config/gcloud/application_default_credentials.json`
+      # Se chgrp falhar: use sudo, ou caia de volta pra `chmod 644 ...` (fallback).
       # Ver seção Troubleshooting do README para detalhes.
       - ${HOME}/.config/gcloud/application_default_credentials.json:/secrets/adc.json:ro
     ports:
