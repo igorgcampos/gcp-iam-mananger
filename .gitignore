@@ -10,6 +10,7 @@ dist/
 .aider-desk/
 .claude/settings.local.json
 .codex
+.impeccable
 # Logs locais
 *.log
 .worktrees/
