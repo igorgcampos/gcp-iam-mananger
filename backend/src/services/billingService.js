@@ -75,7 +75,9 @@ function parseRows(data) {
   return data.rows.map((row) => {
     const obj = {};
     row.f.forEach((cell, i) => { obj[fields[i]] = cell.v; });
-    return { service: obj.service, cost: parseFloat(obj.cost) || 0, currency: obj.currency };
+    return {
+      service: obj.service, sku: obj.sku, cost: parseFloat(obj.cost) || 0, currency: obj.currency,
+    };
   });
 }
 
@@ -86,12 +88,13 @@ async function queryCostByService() {
   const query = `
     SELECT
       service.description AS service,
+      sku.description AS sku,
       SUM(cost) + IFNULL(SUM((SELECT SUM(c.amount) FROM UNNEST(credits) AS c)), 0) AS cost,
       ANY_VALUE(currency) AS currency
     FROM \`${table}\`
     WHERE project.id = @projectId
       AND usage_start_time >= TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
-    GROUP BY service
+    GROUP BY service, sku
   `;
 
   const res = await bigquery.jobs.query({

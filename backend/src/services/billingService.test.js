@@ -9,9 +9,11 @@ jest.mock('./gcpClients', () => ({
 function mockQueryResult(rows) {
   return {
     data: {
-      schema: { fields: [{ name: 'service' }, { name: 'cost' }, { name: 'currency' }] },
-      rows: rows.map(({ service, cost, currency }) => ({
-        f: [{ v: service }, { v: String(cost) }, { v: currency }],
+      schema: { fields: [{ name: 'service' }, { name: 'sku' }, { name: 'cost' }, { name: 'currency' }] },
+      rows: rows.map(({
+        service, sku, cost, currency,
+      }) => ({
+        f: [{ v: service }, { v: sku }, { v: String(cost) }, { v: currency }],
       })),
     },
   };
@@ -38,8 +40,8 @@ describe('getBillingSummary', () => {
 
   test('consulta o BigQuery filtrando pelo projeto e devolve o resumo categorizado', async () => {
     queryMock.mockResolvedValue(mockQueryResult([
-      { service: 'Vertex AI Search', cost: 100, currency: 'BRL' },
-      { service: 'Cloud Run', cost: 10, currency: 'BRL' },
+      { service: 'Vertex AI Search', sku: 'Query API', cost: 100, currency: 'BRL' },
+      { service: 'Cloud Run', sku: 'CPU Allocation Time', cost: 10, currency: 'BRL' },
     ]));
 
     const summary = await getBillingSummary();
@@ -47,6 +49,7 @@ describe('getBillingSummary', () => {
     expect(summary).toMatchObject({
       gemini: 100, infra: 10, uncategorized: 0, total: 110, currency: 'BRL',
     });
+    expect(summary.items.gemini).toEqual([{ service: 'Vertex AI Search', cost: 100, skus: [{ sku: 'Query API', cost: 100 }] }]);
     expect(summary.updatedAt).toBeDefined();
     expect(queryMock).toHaveBeenCalledTimes(1);
     const [call] = queryMock.mock.calls[0];
@@ -55,7 +58,9 @@ describe('getBillingSummary', () => {
   });
 
   test('usa o cache em chamadas subsequentes dentro do TTL', async () => {
-    queryMock.mockResolvedValue(mockQueryResult([{ service: 'Cloud Run', cost: 1, currency: 'BRL' }]));
+    queryMock.mockResolvedValue(mockQueryResult([{
+      service: 'Cloud Run', sku: 'CPU Allocation Time', cost: 1, currency: 'BRL',
+    }]));
 
     await getBillingSummary();
     await getBillingSummary();
@@ -64,7 +69,9 @@ describe('getBillingSummary', () => {
   });
 
   test('refaz a query depois que o TTL do cache expira', async () => {
-    queryMock.mockResolvedValue(mockQueryResult([{ service: 'Cloud Run', cost: 1, currency: 'BRL' }]));
+    queryMock.mockResolvedValue(mockQueryResult([{
+      service: 'Cloud Run', sku: 'CPU Allocation Time', cost: 1, currency: 'BRL',
+    }]));
 
     await getBillingSummary();
     jest.advanceTimersByTime(5 * 60 * 60 * 1000); // 5h > TTL de 4h
@@ -74,7 +81,9 @@ describe('getBillingSummary', () => {
   });
 
   test('chamadas concorrentes com cache vazio compartilham a mesma query em andamento', async () => {
-    queryMock.mockResolvedValue(mockQueryResult([{ service: 'Cloud Run', cost: 1, currency: 'BRL' }]));
+    queryMock.mockResolvedValue(mockQueryResult([{
+      service: 'Cloud Run', sku: 'CPU Allocation Time', cost: 1, currency: 'BRL',
+    }]));
 
     const [a, b] = await Promise.all([getBillingSummary(), getBillingSummary()]);
 
