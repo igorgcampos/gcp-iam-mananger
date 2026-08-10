@@ -146,7 +146,7 @@ body {
   max-width: 440px;
   background: #192645;
   border: 1px solid #40516d;
-  border-radius: 28px;
+  border-radius: 32px;
   box-shadow: 0 24px 70px rgba(17, 43, 72, 0.28);
   padding: 56px 40px;
   text-align: center;
@@ -203,8 +203,44 @@ body {
   color: #a8b8cc;
 }
 
+/* Bloco de marca da tela de login — empilhado (nome + tag), com um dot
+   separador logo abaixo. Classes próprias (não reaproveitam
+   .login-card-brand*) para não afetar o layout horizontal da
+   AccessDeniedScreen, que continua nome + dot + tag lado a lado. */
+.login-brand {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.login-brand-name {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.login-brand-tag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: #a8b8cc;
+}
+
+.login-brand-divider {
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 18px auto 0;
+  border-radius: 50%;
+  background: #34d399;
+}
+
 .login-card-intro {
-  margin-top: 40px;
+  margin-top: 28px;
 }
 
 .login-card-intro-title.ant-typography {
@@ -223,9 +259,11 @@ body {
 }
 
 .ms-signin-btn.ant-btn {
-  margin-top: 36px;
-  width: 100%;
-  height: 56px;
+  margin: 36px auto 0;
+  width: fit-content;
+  min-width: 240px;
+  height: 52px;
+  padding: 0 30px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -233,7 +271,7 @@ body {
   font-size: 14px;
   font-weight: 700;
   border: 1px solid #8fa4c0;
-  border-radius: 12px;
+  border-radius: 999px;
   background: #fff;
   color: #192645;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
@@ -250,11 +288,15 @@ body {
 
 .login-footer-note {
   display: block;
-  margin-top: 28px;
-  font-size: 12px;
+  margin: 28px auto 0;
+  max-width: 280px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
   color: #a8b8cc;
   text-align: center;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .denied-icon {

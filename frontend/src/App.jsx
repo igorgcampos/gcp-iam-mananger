@@ -55,16 +55,16 @@ function LoginScreen() {
         <div className="login-card-badge">
           <img src={logo} alt="Logo" className="login-card-badge-img" />
         </div>
-        <div className="login-card-brand">
-          <span className="login-card-brand-name">EDITORA GLOBO</span>
-          <span className="login-card-brand-dot" />
-          <span className="login-card-brand-tag">Painel interno</span>
+        <div className="login-brand">
+          <span className="login-brand-name">EDITORA GLOBO</span>
+          <span className="login-brand-tag">Painel Corporativo</span>
         </div>
+        <span className="login-brand-divider" aria-hidden="true" />
 
         <div className="login-card-intro">
           <Title level={2} className="login-card-intro-title">Bem-vindo</Title>
           <Text className="login-card-intro-text">
-            Entre com sua conta corporativa Microsoft para acessar o painel de gestão de acessos e licenças.
+            Autentique-se com sua conta corporativa para acessar o sistema interno.
           </Text>
         </div>
 
@@ -82,7 +82,7 @@ function LoginScreen() {
         </Button>
 
         <Text className="login-footer-note">
-          Acesso restrito a colaboradores autorizados via Microsoft Entra ID.
+          Acesso restrito • Somente pessoas autorizadas
         </Text>
       </div>
     </div>
