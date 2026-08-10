@@ -78,7 +78,7 @@ export default function BillingPage({
                 icon={<QuestionCircleOutlined />}
                 iconBg="#f8fafc"
                 iconColor="#64748b"
-                label="Não categorizado"
+                label="Outros Serviços"
                 value={formatCurrency(summary.uncategorized, currency)}
                 hint="Fora das listas conhecidas"
                 currency={currency}

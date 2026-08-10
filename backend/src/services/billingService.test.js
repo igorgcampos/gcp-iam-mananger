@@ -118,12 +118,12 @@ describe('getBillingSummary', () => {
 });
 
 describe('categorizeCosts', () => {
-  test('soma Gemini, Infra e Não categorizado, e eles fecham com o total', () => {
+  test('soma Gemini, Infra e Outros Serviços, e eles fecham com o total', () => {
     const rows = [
       { service: 'Vertex AI Search', sku: 'Vertex AI Search Query API', cost: 1696.14, currency: 'BRL' },
       { service: 'Cloud Run', sku: 'Cloud Run - CPU Allocation Time', cost: 42.5, currency: 'BRL' },
       { service: 'Artifact Registry', sku: 'Artifact Registry Storage', cost: 3.2, currency: 'BRL' },
-      { service: 'Cloud Storage', sku: 'Standard Storage', cost: 7.1, currency: 'BRL' }, // não está em nenhuma lista
+      { service: 'Dataflow', sku: 'vCPU time', cost: 7.1, currency: 'BRL' }, // dados/analytics — não está em nenhuma lista de propósito (ver ADR 0009)
     ];
 
     const result = categorizeCosts(rows);
@@ -133,6 +133,18 @@ describe('categorizeCosts', () => {
     expect(result.uncategorized).toBe(7.1);
     expect(result.total).toBeCloseTo(1748.94, 2);
     expect(result.total).toBeCloseTo(result.gemini + result.infra + result.uncategorized, 2);
+  });
+
+  test('categoriza Cloud Storage e Secret Manager como Infra (infra genérica de nuvem, não só o que a app usa — ADR 0009)', () => {
+    const rows = [
+      { service: 'Cloud Storage', sku: 'Standard Storage', cost: 7.1, currency: 'BRL' },
+      { service: 'Secret Manager', sku: 'Active Secret Versions', cost: 1.5, currency: 'BRL' },
+    ];
+
+    const result = categorizeCosts(rows);
+
+    expect(result.infra).toBe(8.6);
+    expect(result.uncategorized).toBe(0);
   });
 
   test('usa a moeda da primeira linha', () => {

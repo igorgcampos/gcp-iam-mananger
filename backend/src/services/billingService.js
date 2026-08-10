@@ -4,9 +4,36 @@ const { bigquery } = require('./gcpClients');
 // compõem cada categoria — editar aqui quando a aplicação passar a usar (ou
 // parar de usar) um serviço GCP. Ver Task 2 (backend/scripts/list-billing-services.js)
 // para descobrir os nomes reais em uso. Qualquer serviço fora das duas listas
-// cai em "uncategorized" — de propósito, ver CONTEXT.md ("Não Categorizado").
+// cai em "uncategorized" (rótulo "Outros Serviços" na UI) — de propósito, ver
+// CONTEXT.md ("Outros Serviços") e ADR 0009.
 const GEMINI_SERVICES = ['Vertex AI Search', 'Vertex AI'];
-const INFRA_SERVICES = ['Cloud Run', 'Artifact Registry', 'Cloud Logging', 'BigQuery'];
+
+// INFRA_SERVICES é a infraestrutura "clássica" de nuvem (compute, storage,
+// banco, rede, segurança, devops, observabilidade, mensageria) — não se
+// restringe ao que esta aplicação usa hoje (ver ADR 0009, que revisa esse
+// critério em relação à ADR 0006). Serviços de dados/analytics (Dataflow,
+// Dataproc, Looker etc.) ficam de fora de propósito e caem em "Outros
+// Serviços" se aparecerem.
+const INFRA_SERVICES = [
+  // Compute
+  'Compute Engine', 'Google Kubernetes Engine', 'App Engine', 'Cloud Run', 'Cloud Functions',
+  // Storage
+  'Cloud Storage', 'Filestore',
+  // Banco de dados
+  'Cloud SQL', 'Cloud Spanner', 'Firestore', 'Cloud Bigtable', 'Memorystore',
+  // Rede
+  'Networking', 'Cloud DNS', 'Cloud CDN', 'Cloud VPN', 'Cloud Interconnect', 'Cloud Load Balancing',
+  // Segurança / identidade
+  'Secret Manager', 'Cloud KMS', 'Cloud Armor', 'Certificate Manager',
+  // DevOps / CI-CD
+  'Artifact Registry', 'Cloud Build', 'Container Registry',
+  // Observabilidade
+  'Cloud Logging', 'Cloud Monitoring', 'Cloud Trace', 'Error Reporting', 'Cloud Profiler',
+  // Mensageria / orquestração serverless
+  'Pub/Sub', 'Cloud Tasks', 'Cloud Scheduler', 'Eventarc',
+  // Dados (exceção deliberada — ver Custo de Infra no CONTEXT.md)
+  'BigQuery',
+];
 
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;

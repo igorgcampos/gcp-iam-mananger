@@ -75,27 +75,40 @@ describe('secretManager', () => {
     ).rejects.toThrow(/Falha ao buscar o secret/);
   });
 
-  test('resolveAppSecrets resolve AZURE_CLIENT_SECRET e SESSION_JWT_SECRET sem trocar os valores', async () => {
+  test('resolveAppSecrets resolve os 5 valores da aplicação sem trocar entre si', async () => {
     delete process.env.SESSION_JWT_SECRET;
+    delete process.env.AZURE_TENANT_ID;
+    delete process.env.AZURE_CLIENT_ID;
+    delete process.env.AZURE_ALLOWED_GROUP_ID;
     process.env.AZURE_CLIENT_SECRET_ID = 'azure-client-secret-dev';
     process.env.SESSION_JWT_SECRET_ID = 'session-jwt-secret-dev';
+    process.env.AZURE_TENANT_ID_ID = 'azure-tenant-id-dev';
+    process.env.AZURE_CLIENT_ID_ID = 'azure-client-id-dev';
+    process.env.AZURE_ALLOWED_GROUP_ID_ID = 'azure-allowed-group-id-dev';
     process.env.GCP_PROJECT_ID = 'agentspace-469418';
+    const valores = {
+      'azure-client-secret-dev': 'valor-azure-secret',
+      'session-jwt-secret-dev': 'valor-jwt',
+      'azure-tenant-id-dev': 'valor-tenant',
+      'azure-client-id-dev': 'valor-client-id',
+      'azure-allowed-group-id-dev': 'valor-group-id',
+    };
     mockAccessSecretVersion.mockImplementation(({ name }) => {
-      if (name.includes('azure-client-secret-dev')) {
-        return Promise.resolve([{ payload: { data: Buffer.from('valor-azure') } }]);
+      const encontrado = Object.entries(valores).find(([secretId]) => name.includes(secretId));
+      if (!encontrado) {
+        throw new Error(`nome de secret inesperado: ${name}`);
       }
-      if (name.includes('session-jwt-secret-dev')) {
-        return Promise.resolve([{ payload: { data: Buffer.from('valor-jwt') } }]);
-      }
-      throw new Error(`nome de secret inesperado: ${name}`);
+      return Promise.resolve([{ payload: { data: Buffer.from(encontrado[1]) } }]);
     });
 
     // eslint-disable-next-line global-require
     const { resolveAppSecrets } = require('./secretManager');
     await resolveAppSecrets();
 
-    expect(process.env.AZURE_CLIENT_SECRET).toBe('valor-azure');
+    expect(process.env.AZURE_CLIENT_SECRET).toBe('valor-azure-secret');
     expect(process.env.SESSION_JWT_SECRET).toBe('valor-jwt');
-    expect(process.env.AZURE_CLIENT_SECRET).not.toBe(process.env.SESSION_JWT_SECRET);
+    expect(process.env.AZURE_TENANT_ID).toBe('valor-tenant');
+    expect(process.env.AZURE_CLIENT_ID).toBe('valor-client-id');
+    expect(process.env.AZURE_ALLOWED_GROUP_ID).toBe('valor-group-id');
   });
 });

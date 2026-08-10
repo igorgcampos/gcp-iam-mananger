@@ -57,11 +57,31 @@ async function resolveSecret(envVar, secretIdEnvVar) {
   return value;
 }
 
-// Resolve os dois segredos reais da aplicação — chamada uma vez, no boot
-// (backend/src/index.js), antes de app.listen().
+// Resolve os 5 valores da aplicação que vivem no Secret Manager — chamada
+// uma vez, no boot (backend/src/index.js), antes de app.listen(). Só
+// AZURE_CLIENT_SECRET/SESSION_JWT_SECRET são segredos "de verdade"; os
+// outros 3 (tenant/client/group do Entra ID) foram promovidos ao Secret
+// Manager também (ver docs/deploy-cloud-run-manual.md, que já injeta os 6
+// em produção via --update-secrets) — resolveSecret() não distingue os
+// dois casos, então reaproveitá-la aqui é só seguir a mesma convenção.
+// GCP_PROJECT_ID fica de fora: é necessário para montar o resource name
+// dos secrets acima, então não pode vir de lá (ovo e galinha).
+//
+// Em paralelo (Promise.all), não em sequência: os 5 são independentes entre
+// si — cada um escreve numa env var diferente, nenhum depende do valor
+// resolvido por outro — então não há razão pra pagar o tempo de rede de 5
+// chamadas somado em vez do tempo da mais lenta delas. Isso importa
+// especialmente em dev local (sem Cloud Run injetando nada, toda vez busca
+// as 5 no Secret Manager via ADC impersonada); em produção nenhuma delas
+// chega a chamar a API — process.env já vem populado pelo Cloud Run.
 async function resolveAppSecrets() {
-  await resolveSecret('AZURE_CLIENT_SECRET', 'AZURE_CLIENT_SECRET_ID');
-  await resolveSecret('SESSION_JWT_SECRET', 'SESSION_JWT_SECRET_ID');
+  await Promise.all([
+    resolveSecret('AZURE_CLIENT_SECRET', 'AZURE_CLIENT_SECRET_ID'),
+    resolveSecret('SESSION_JWT_SECRET', 'SESSION_JWT_SECRET_ID'),
+    resolveSecret('AZURE_TENANT_ID', 'AZURE_TENANT_ID_ID'),
+    resolveSecret('AZURE_CLIENT_ID', 'AZURE_CLIENT_ID_ID'),
+    resolveSecret('AZURE_ALLOWED_GROUP_ID', 'AZURE_ALLOWED_GROUP_ID_ID'),
+  ]);
 }
 
 module.exports = { resolveSecret, resolveAppSecrets };
