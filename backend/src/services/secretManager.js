@@ -15,22 +15,19 @@ function getClient() {
 // docs/adr/0007-adc-e-secret-manager-para-credenciais.md). Se vier ausente
 // — dev local, onde não existe Cloud Run injetando nada — busca a versão
 // mais recente do secret no Secret Manager via ADC (a mesma usada por
-// gcpAuth.js), no ID indicado por `secretIdEnvVar`, e grava o valor de
-// volta em process.env[envVar] — o resto do código (msalClient.js,
-// sessionToken.js) continua lendo process.env sem saber de onde veio.
+// gcpAuth.js), no ID indicado por `secretIdEnvVar` e, na ausência dele,
+// no próprio nome de `envVar` — por convenção, o secret no Secret Manager
+// tem o mesmo nome da env var (ver README), então `*_ID` só precisa ser
+// setado em backend/.env quando um dev quiser apontar para um secret com
+// nome diferente. O valor resolvido é gravado de volta em
+// process.env[envVar] — o resto do código (msalClient.js, sessionToken.js)
+// continua lendo process.env sem saber de onde veio.
 async function resolveSecret(envVar, secretIdEnvVar) {
   if (process.env[envVar]) {
     return process.env[envVar];
   }
 
-  const secretId = process.env[secretIdEnvVar];
-  if (!secretId) {
-    throw new Error(
-      `${envVar} não está definido e ${secretIdEnvVar} também não — configure um `
-      + `dos dois em backend/.env (ver README, seção "Segredos no Secret Manager").`,
-    );
-  }
-
+  const secretId = process.env[secretIdEnvVar] || envVar;
   const projectId = process.env.GCP_PROJECT_ID;
   if (!projectId) {
     throw new Error(
