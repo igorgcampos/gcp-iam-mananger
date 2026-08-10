@@ -1,6 +1,6 @@
 # EdGlobo GCP Admin
 
-Painel web para gerenciar acessos no Google Cloud — quem pode usar o Agentspace e quem tem licença Gemini Enterprise — sem precisar abrir o console do GCP.
+Painel web para administrar, sem precisar abrir o console do GCP, quem pode usar o Agentspace (papel IAM `discoveryengine.user` e o Papel Complementar Code Assist), quem tem licença Gemini Enterprise/Agentspace Enterprise Plus, e para acompanhar o custo do projeto no GCP. Um Dashboard reúne os números das duas frentes num só lugar, com busca cruzada e atalhos.
 
 ---
 
@@ -55,6 +55,8 @@ Crie uma service account no projeto `agentspace-469418` com as seguintes roles:
 | `roles/bigquery.dataViewer` | Ler a tabela de exportação de faturamento — **concessão no dataset `billing_standard` do projeto `infra-bi-355620`** (projeto diferente do que hospeda a SA), via IAM do dataset (não `gcloud projects add-iam-policy-binding`) |
 | `roles/secretmanager.secretAccessor` | Ler os 5 secrets da aplicação (`AZURE_CLIENT_SECRET`, `SESSION_JWT_SECRET`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_ALLOWED_GROUP_ID`) — concedido em cada secret individual, não no projeto inteiro (ver seção [Autenticação (SSO)](#autenticação-sso)) |
 
+> **Role customizada do Code Assist:** diferente da `iamValidationProbe` (auto-provisionada pela própria aplicação, ver [ADR 0002](docs/adr/0002-validacao-de-principal-via-probe-descartavel.md)), a role usada para conceder o Papel Complementar Code Assist (`projects/agentspace-469418/roles/CustomRole`) **precisa já existir no projeto antes de usar essa funcionalidade** — a aplicação só concede/revoga membros nela via `setIamPolicy` (coberto pelo `roles/iam.securityAdmin` acima), nunca a cria. Ver [ADR 0004](docs/adr/0004-code-assist-e-papel-complementar.md).
+
 Nenhuma chave JSON é baixada. Em vez disso, cada desenvolvedor recebe **impersonation** sobre essa SA:
 
 ```bash
@@ -88,16 +90,21 @@ Isso grava a ADC impersonada em `~/.config/gcloud/application_default_credential
 
 Habilite também a **Identity and Access Management (IAM) API** no projeto (Cloud Console → APIs & Services), necessária para o auto-provisionamento da custom role `iamValidationProbe`.
 
-Para a página de **Custos**, configure a variável de ambiente `BILLING_EXPORT_TABLE` em `backend/.env` com o valor `infra-bi-355620.billing_standard.gcp_billing_export_v1_01779C_55AF20_FD92F6` — documentação em [`backend/.env.example`](backend/.env.example); veja [ADR 0006](docs/adr/0006-billing-export-como-fonte-de-custos.md) para a rationale arquitetural.
+A página de **Custos** depende da variável `BILLING_EXPORT_TABLE` em `backend/.env` (ver bloco logo abaixo) — veja [ADR 0006](docs/adr/0006-billing-export-como-fonte-de-custos.md) para a rationale arquitetural.
 
 ### Variáveis de ambiente (`backend/.env`)
+
+O arquivo `backend/.env` continua sendo necessário — o que não existe mais é `GOOGLE_APPLICATION_CREDENTIALS` apontando para um arquivo de chave, já que a autenticação com o GCP passou a ser via ADC (ver [gcloud CLI](#gcloud-cli) acima). Ele reúne três grupos de variáveis: as básicas abaixo, mais as de [Autenticação (SSO)](#autenticação-sso) e as [Segredos no Secret Manager](#segredos-no-secret-manager) descritas logo à frente — `cp backend/.env.example backend/.env` já traz tudo isso pronto.
 
 ```env
 GCP_PROJECT_ID=agentspace-469418
 PORT=3001
-```
 
-Não existe mais `GOOGLE_APPLICATION_CREDENTIALS` apontando para um arquivo de chave — a autenticação com o GCP é via ADC (ver [gcloud CLI](#gcloud-cli) acima).
+# Tabela do BigQuery Billing Export usada pela página de Custos — obrigatória
+# para essa tela funcionar (sem ela, GET /api/billing/summary falha). Ver
+# seção "Service Account no GCP" acima e docs/adr/0006-billing-export-como-fonte-de-custos.md.
+BILLING_EXPORT_TABLE=infra-bi-355620.billing_standard.gcp_billing_export_v1_01779C_55AF20_FD92F6
+```
 
 > A partir da introdução do SSO, `backend/.env` também precisa das variáveis descritas em [Autenticação (SSO)](#autenticação-sso) logo abaixo.
 
@@ -132,19 +139,9 @@ _Fonte editável: [`docs/sso-fluxo-login.mmd`](docs/sso-fluxo-login.mmd) (sintax
 # erro de autenticação. Em dev é o Vite dev server; em produção é o domínio
 # público do painel.
 FRONTEND_BASE_URL=http://localhost:5173
-
-# --- Segredos (Secret Manager) ---
-# Nenhum dos 5 valores abaixo entra aqui como valor — só o ID do secret no
-# Secret Manager de onde o backend deve buscá-los em dev (ver seção
-# "Segredos no Secret Manager" abaixo e ADR 0007).
-AZURE_CLIENT_SECRET_ID=AZURE_CLIENT_SECRET
-SESSION_JWT_SECRET_ID=SESSION_JWT_SECRET
-AZURE_TENANT_ID_ID=AZURE_TENANT_ID
-AZURE_CLIENT_ID_ID=AZURE_CLIENT_ID
-AZURE_ALLOWED_GROUP_ID_ID=AZURE_ALLOWED_GROUP_ID
 ```
 
-> Esse bloco é idêntico ao que já vem em [`backend/.env.example`](backend/.env.example) — e, diferente de antes do SSO, **não sobrou nenhum placeholder pessoal pra editar**: todo valor aqui é fixo (nome de secret, não segredo em si) e igual pra qualquer dev. `cp backend/.env.example backend/.env` já deixa o arquivo pronto, sem edição nenhuma — quem precisa estar correto é a permissão da SA no Secret Manager, não o `.env`.
+> Nenhuma variável de Secret Manager precisa ser declarada aqui — ver seção [Segredos no Secret Manager](#segredos-no-secret-manager) logo abaixo. Esse bloco é idêntico ao que já vem em [`backend/.env.example`](backend/.env.example) — e, diferente de antes do SSO, **não sobrou nenhum placeholder pessoal pra editar**: todo valor aqui é fixo e igual pra qualquer dev. `cp backend/.env.example backend/.env` já deixa o arquivo pronto, sem edição nenhuma — quem precisa estar correto é a permissão da SA no Secret Manager, não o `.env`.
 
 ### Segredos no Secret Manager
 
@@ -160,7 +157,7 @@ AZURE_ALLOWED_GROUP_ID_ID=AZURE_ALLOWED_GROUP_ID
 
 > **Débito técnico conhecido:** por enquanto é **um único secret de cada, compartilhado entre dev e produção** — não a separação por ambiente que o [ADR 0007](docs/adr/0007-adc-e-secret-manager-para-credenciais.md) original recomendava. Simplifica o primeiro deploy, mas significa que rotacionar ou vazar um deles afeta os dois ambientes ao mesmo tempo. Migrar para secrets separados por ambiente é uma melhoria futura, não uma mudança de código — só criar as versões `_PROD` e apontar o `--update-secrets` do Cloud Run pra elas.
 
-> Os nomes dos secrets no Secret Manager são iguais ao nome da env var (maiúsculo) — não há uma convenção de nomenclatura diferente (minúsculo/hífen) sendo aplicada aqui.
+> Os nomes dos secrets no Secret Manager são iguais ao nome da env var (maiúsculo) — não há uma convenção de nomenclatura diferente (minúsculo/hífen) sendo aplicada aqui. Justamente por isso, `resolveSecret()` usa o nome da própria env var como ID do secret por padrão — `AZURE_CLIENT_SECRET_ID`/`SESSION_JWT_SECRET_ID`/`AZURE_TENANT_ID_ID`/`AZURE_CLIENT_ID_ID`/`AZURE_ALLOWED_GROUP_ID_ID` só precisam ser declaradas em `backend/.env` se algum secret tiver um nome diferente da convenção (ex: testar uma versão alternativa sem afetar o secret "de produção compartilhada").
 
 Criação inicial (uma vez, por quem tem permissão de administrar o Secret Manager no projeto — passo a passo completo, incluindo o deploy, em [`docs/deploy-cloud-run-manual.md`](docs/deploy-cloud-run-manual.md)):
 
@@ -185,7 +182,7 @@ for secret in AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_ALLOWED_GROUP_ID AZURE_CLIEN
 done
 ```
 
-Em produção, o Cloud Run injeta o valor diretamente como variável de ambiente via `--update-secrets` no deploy (ver [Levando para o Cloud Run](#levando-para-o-cloud-run)) — o backend só lê `process.env.*`, sem chamar o Secret Manager. Em dev local não existe Cloud Run fazendo essa injeção, então o backend chama a API do Secret Manager sozinho, no boot (antes de aceitar qualquer requisição), usando a mesma ADC do [gcloud CLI](#gcloud-cli) e os IDs configurados em `AZURE_CLIENT_SECRET_ID`/`SESSION_JWT_SECRET_ID`/`AZURE_TENANT_ID_ID`/`AZURE_CLIENT_ID_ID`/`AZURE_ALLOWED_GROUP_ID_ID`.
+Em produção, o Cloud Run injeta o valor diretamente como variável de ambiente via `--update-secrets` no deploy (ver [Levando para o Cloud Run](#levando-para-o-cloud-run)) — o backend só lê `process.env.*`, sem chamar o Secret Manager. Em dev local não existe Cloud Run fazendo essa injeção, então o backend chama a API do Secret Manager sozinho, no boot (antes de aceitar qualquer requisição), usando a mesma ADC do [gcloud CLI](#gcloud-cli) e buscando cada secret pelo nome da própria env var (ex.: a env var `AZURE_CLIENT_SECRET` busca o secret `AZURE_CLIENT_SECRET`) — nenhuma variável `*_ID` precisa estar configurada em `backend/.env` para isso funcionar.
 
 > **Antes de reiniciar o backend com essa versão:** enquanto os 5 secrets acima não existirem, ou não estiverem acessíveis pela SA, o backend falha já no boot (não sobe) — e como `requireAuth` protege `/api/iam` e `/api/gemini`, o painel fica inacessível até a configuração estar completa (ver checklist em [`docs/sso-pedidos-time-ad.md`](docs/sso-pedidos-time-ad.md)).
 
@@ -265,6 +262,18 @@ Cada imagem já respeita o contrato do Cloud Run (escuta `$PORT`, stateless, rod
 
 ## O que a aplicação faz
 
+A aplicação tem quatro telas, acessíveis pela barra lateral (retrátil): **Dashboard**, **IAM**, **Gemini Enterprise** e **Custos**. As quatro ficam sempre montadas — trocar de aba só esconde/mostra via CSS, sem refazer buscas — e os dados de IAM/Gemini/Custos são buscados uma única vez no `App.jsx` e compartilhados entre o Dashboard e as respectivas páginas.
+
+### Tela Dashboard — Visão Geral
+
+Resumo ao vivo dos dois domínios (IAM e Gemini Enterprise), pensado para responder "está tudo bem?" sem abrir as outras telas:
+
+- **Cards de estatística:** Usuários IAM, Code Assist (contagem e % do total de usuários IAM), Licenças atribuídas, Slots livres e Usuários inativos (≥ 3 meses sem uso, limiar fixo do card — diferente do limiar ajustável do modal completo).
+- **Alerta de licença expirando/expirada:** aparece quando alguma `licenseConfig` está perto do fim da vigência ou já venceu (sem renovação automática).
+- **Busca global:** um campo de busca por email cruza usuários de IAM e de Gemini ao mesmo tempo; selecionar um resultado navega para a tela correspondente (IAM ou Gemini) já com esse email pré-filtrado na busca local da página.
+- **Atalho para o Relatório de Usuários Inativos:** clicar no card "Usuários inativos" abre o modal de inatividade (ver [Tela Gemini Enterprise](#tela-gemini-enterprise--licenças) abaixo) diretamente na tela Gemini, já com o limiar de 3 meses aplicado.
+- Painéis de resumo: distribuição de Code Assist entre os usuários IAM, e ocupação de licença por tier (`licenseConfig`).
+
 ### Tela IAM — Discovery Engine User
 
 Lista todos os usuários que têm a role `roles/discoveryengine.user` no projeto. É essa role que dá acesso de uso ao Agentspace.
@@ -275,9 +284,11 @@ principal://iam.googleapis.com/locations/global/workforcePools/entra-workforce/s
 ```
 A interface exibe apenas o email (a última parte após `/`).
 
-**Adicionar usuário:** basta digitar o email — o prefixo do workforce pool é preenchido automaticamente.
+**Adicionar usuário:** basta digitar o email — o prefixo do workforce pool é preenchido automaticamente. Um checkbox opcional no mesmo modal ("Adicionar também ao Code Assist") já concede o Papel Complementar Code Assist na mesma operação (ver abaixo); se a concessão do Code Assist falhar, o `discoveryengine.user` já concedido não é desfeito — o admin vê os dois resultados separadamente.
 
 **Validação:** antes de adicionar, o backend verifica se o usuário já tem a role (erro `409` se tiver) e, em seguida, valida se o email já possui Identidade Sincronizada — via probe descartável numa custom role sem poder real (ver [ADR 0002](docs/adr/0002-validacao-de-principal-via-probe-descartavel.md)). Se o email não estiver sincronizado, retorna `422` orientando a falar com o time de AD; qualquer outra falha técnica no probe retorna `500` com mensagem genérica.
+
+**Code Assist (Papel Complementar):** cada linha da tabela tem uma coluna própria para conceder/revogar o Code Assist — role IAM customizada (`projects/agentspace-469418/roles/CustomRole`) concedida via membro direto do Cloud Identity (`user:<email>`), diferente do principal do Workforce Pool usado pelo `discoveryengine.user`. Só pode ser concedido a quem já tem `discoveryengine.user`, e reaproveita a mesma Validação de Principal. **Remover** um usuário do IAM revoga também o Code Assist automaticamente (mesma lógica de cascata do ADR 0003, abaixo) — ver [ADR 0004](docs/adr/0004-code-assist-e-papel-complementar.md) para o racional completo.
 
 ### Tela Gemini Enterprise — Licenças
 
@@ -285,9 +296,13 @@ Exibe as subscriptions ativas (total vs. atribuído por tier) e a lista completa
 
 **Adicionar usuário:** escolha o email e a licença no dropdown — o dropdown carrega os `licenseConfigs` disponíveis em tempo real, com o número de slots restantes visível antes de confirmar.
 
-**Remover:** desatribui a licença, liberando o slot para outro usuário.
+**Remover:** desatribui a licença, liberando o slot para outro usuário. Essa ação também revoga o papel IAM `discoveryengine.user` do usuário, se ele existir — as duas coisas são, para o admin, uma única operação de "tirar o acesso"; o acoplamento é unidirecional (revogar pela tela de IAM não remove a licença). Se a revogação do IAM falhar por um motivo real, a licença não é removida. Ver [ADR 0003](docs/adr/0003-remocao-de-licenca-revoga-iam.md).
 
-Ambas as telas fazem polling automático a cada **3 minutos** (`BACKGROUND_POLL_INTERVAL_MS`) e têm botão de refresh manual.
+**Relatório de Usuários Inativos:** botão que abre um modal com os usuários cuja Data de Referência (último acesso, ou data de atribuição se nunca acessou) está mais distante do que um Limite de Inatividade escolhido na hora (seletor de meses). Calculado inteiramente no frontend sobre os dados já carregados — sem endpoint novo, scheduler ou envio de email (decisão registrada, ver [ADR 0001](docs/adr/0001-relatorio-inatividade-on-demand-client-side.md)). A tabela do modal permite remover a licença direto dali e tem um botão "Copiar tabela" (HTML + texto, pronto para colar em email/planilha).
+
+**Copiar Relatório de Usuários:** botão separado que copia a lista completa de usuários com licença (não só os inativos) no mesmo formato HTML/texto.
+
+Ambas as telas de IAM e Gemini fazem polling automático a cada **3 minutos** (`BACKGROUND_POLL_INTERVAL_MS`) e têm botão de refresh manual.
 
 #### Fluxo de atualização — sem cache, diferente da tela Custos
 
@@ -297,15 +312,15 @@ Isso significa que tanto o polling automático (a cada 3 minutos) quanto o cliqu
 
 ### Tela Custos
 
-Mostra o gasto do projeto `agentspace-469418` no mês corrente até hoje, dividido em três categorias que sempre somam o total: **Gemini** (`Vertex AI Search` + `Vertex AI` — licenças e consumo de modelo), **Infra** (`Cloud Run`, `Artifact Registry`, `Cloud Logging`, `BigQuery` — o que roda a própria aplicação) e **Não categorizado** (qualquer serviço fora dessas duas listas — existe para garantir que a soma sempre feche com o total, e serve de alerta quando um serviço novo precisa ser classificado).
+Mostra o gasto do projeto `agentspace-469418` no mês corrente até hoje, dividido em três categorias que sempre somam o total: **Gemini** (`Vertex AI Search` + `Vertex AI` — licenças e consumo de modelo), **Infra** (infraestrutura "clássica" de nuvem — compute, storage, banco, rede, segurança, devops, observabilidade, mensageria — independente de esta aplicação usar ou não o serviço hoje; `BigQuery` é exceção deliberada) e **Outros Serviços** (qualquer serviço fora dessas duas listas — existe para garantir que a soma sempre feche com o total, e serve de alerta quando um serviço novo precisa ser classificado). O critério de Infra foi ampliado e a categoria de fechamento renomeada de "Não Categorizado" para "Outros Serviços" — ver [ADR 0009](docs/adr/0009-criterio-de-infra-e-outros-servicos.md).
 
-**Drill-down por SKU:** clicar num card de categoria (Gemini, Infra ou Não categorizado) expande inline a lista de Serviços daquela categoria, e dentro de cada Serviço os SKUs correspondentes — ambos ordenados do maior custo pro menor. Vários cards podem ficar expandidos ao mesmo tempo, de forma independente. O card "Total do projeto" não tem essa interação (não existe uma lista de SKUs coerente pra ele). Categoria sem custo no mês continua clicável e mostra "Nenhum custo neste período" ao expandir.
+**Drill-down por SKU:** clicar num card de categoria (Gemini, Infra ou Outros Serviços) expande inline a lista de Serviços daquela categoria, e dentro de cada Serviço os SKUs correspondentes — ambos ordenados do maior custo pro menor. Vários cards podem ficar expandidos ao mesmo tempo, de forma independente. O card "Total do projeto" não tem essa interação (não existe uma lista de SKUs coerente pra ele). Categoria sem custo no mês continua clicável e mostra "Nenhum custo neste período" ao expandir.
 
 **De onde vêm os dados:** o backend consulta diretamente a tabela do **BigQuery Billing Export** (`infra-bi-355620.billing_standard.gcp_billing_export_v1_...`), não a Cloud Billing API — ver [ADR 0006](docs/adr/0006-billing-export-como-fonte-de-custos.md) para o porquê. Como esse export só é atualizado 1x/dia pelo próprio GCP, o backend cacheia o resultado em memória por **4 horas**; não há polling agressivo (seria gasto de BigQuery sem propósito). O botão "Atualizar" dispara uma nova consulta só quando o cache já expirou.
 
-**Categorização:** as listas `GEMINI_SERVICES`/`INFRA_SERVICES` ficam hardcoded em `backend/src/services/billingService.js` — não há heurística automática. Se "Não categorizado" aparecer com um valor inesperado, rode `npm run billing:services` (dentro de `backend/`, com credenciais configuradas) para ver o breakdown real de serviços de billing do projeto e decidir se algum precisa entrar numa das listas.
+**Categorização:** as listas `GEMINI_SERVICES`/`INFRA_SERVICES` ficam hardcoded em `backend/src/services/billingService.js` — não há heurística automática. Se "Outros Serviços" aparecer com um valor inesperado, rode `npm run billing:services` (dentro de `backend/`, com credenciais configuradas — script em `backend/scripts/list-billing-services.js`) para ver o breakdown real de serviços de billing do projeto e decidir se algum precisa entrar numa das listas.
 
-**Exceção — assinaturas sem `project.id`:** nem toda linha de custo Gemini tem `project.id = agentspace-469418`. Assinaturas anuais (SKU `"...Subscription - one year term"`) às vezes são faturadas no nível da Billing Account inteira em vez de atreladas a um projeto — ex: `Gemini Enterprise Standard` é assim, enquanto `Agentspace Enterprise Plus` tem `project.id` preenchido normalmente. A query inclui essas linhas explicitamente, mas só para os Serviços da lista `GEMINI_SERVICES` (Infra e Não Categorizado continuam estritamente por projeto) — ver [ADR 0008](docs/adr/0008-custo-gemini-inclui-assinaturas-sem-project-id.md) para o porquê e os riscos aceitos dessa decisão.
+**Exceção — assinaturas sem `project.id`:** nem toda linha de custo Gemini tem `project.id = agentspace-469418`. Assinaturas anuais (SKU `"...Subscription - one year term"`) às vezes são faturadas no nível da Billing Account inteira em vez de atreladas a um projeto — ex: `Gemini Enterprise Standard` é assim, enquanto `Agentspace Enterprise Plus` tem `project.id` preenchido normalmente. A query inclui essas linhas explicitamente, mas só para os Serviços da lista `GEMINI_SERVICES` (Infra e Outros Serviços continuam estritamente por projeto) — ver [ADR 0008](docs/adr/0008-custo-gemini-inclui-assinaturas-sem-project-id.md) para o porquê e os riscos aceitos dessa decisão.
 
 #### Fluxo de atualização (refresh manual e automático)
 
@@ -319,6 +334,8 @@ Em ambos os casos, quem decide se vai ao BigQuery ou devolve o cache é o **back
 ![Diagrama do fluxo de atualização de Custos](docs/billing-fluxo-refresh.svg)
 
 _Fonte editável: [`docs/billing-fluxo-refresh.mmd`](docs/billing-fluxo-refresh.mmd) (sintaxe [Mermaid](https://mermaid.js.org/), renderizado com `npx @mermaid-js/mermaid-cli`)._
+
+> Ver [`CONTEXT.md`](CONTEXT.md) para o glossário completo de termos usados nesta aplicação (Licença, Atribuição, Papel Complementar, Operador, Billing Account, etc.) e a lista de todos os ADRs em [`docs/adr/`](docs/adr/).
 
 ---
 
@@ -335,22 +352,26 @@ O frontend nunca fala diretamente com o GCP — o backend autentica com a servic
 ### IAM
 
 ```
-GET    /api/iam/users              Lista usuários com roles/discoveryengine.user
-POST   /api/iam/users              Adiciona usuário à role
-DELETE /api/iam/users/:email       Remove usuário da role
+GET    /api/iam/users                       Lista usuários com roles/discoveryengine.user (inclui status do Code Assist)
+POST   /api/iam/users                       Adiciona usuário à role (opcionalmente já concede Code Assist)
+DELETE /api/iam/users/:email                Remove usuário da role (revoga também o Code Assist, se houver)
+POST   /api/iam/users/:email/code-assist    Concede o Papel Complementar Code Assist
+DELETE /api/iam/users/:email/code-assist    Revoga o Papel Complementar Code Assist
 ```
 
 **POST /api/iam/users — body:**
 ```json
-{ "email": "usuario@edglobo.com.br" }
+{ "email": "usuario@edglobo.com.br", "codeAssist": false }
 ```
+`codeAssist` é opcional (default `false`). Quando `true`, a resposta (`201`) inclui `codeAssist: { granted: true }` ou, se a concessão falhar sem desfazer o `discoveryengine.user` já criado, `codeAssist: { granted: false, error: "..." }`.
 
 **GET /api/iam/users — response:**
 ```json
 [
   {
     "email": "usuario@edglobo.com.br",
-    "principal": "principal://iam.googleapis.com/locations/global/workforcePools/entra-workforce/subject/usuario@edglobo.com.br"
+    "principal": "principal://iam.googleapis.com/locations/global/workforcePools/entra-workforce/subject/usuario@edglobo.com.br",
+    "codeAssist": false
   }
 ]
 ```
@@ -361,7 +382,7 @@ DELETE /api/iam/users/:email       Remove usuário da role
 GET    /api/gemini/license-configs   Lista licenças disponíveis (com slots restantes)
 GET    /api/gemini/users             Lista usuários com licença atribuída
 POST   /api/gemini/users             Atribui licença a um usuário
-DELETE /api/gemini/users/:email      Remove licença de um usuário
+DELETE /api/gemini/users/:email      Remove licença de um usuário (revoga também roles/discoveryengine.user, se houver — ver ADR 0003)
 ```
 
 **POST /api/gemini/users — body:**
@@ -406,6 +427,8 @@ GET    /api/billing/summary          Custo do projeto no mês corrente, por cate
 ```
 
 `items` agrupa cada categoria por Serviço (`service.description` do billing export) e, dentro de cada Serviço, por SKU (`sku.description`), ambos ordenados por custo decrescente — é o que alimenta o drill-down por card da [Tela Custos](#tela-custos). SKUs sem `sku.description` no billing export aparecem como `"Outros"`.
+
+> A chave `uncategorized` no JSON não mudou (não é um contrato de API novo) — só o rótulo exibido na UI, que passou de "Não Categorizado" para "Outros Serviços" (ver [ADR 0009](docs/adr/0009-criterio-de-infra-e-outros-servicos.md)).
 
 Resultado cacheado no backend por até 4h — ver seção [Tela Custos](#tela-custos) acima.
 
@@ -485,7 +508,7 @@ Isso dá acesso de leitura apenas ao grupo `nodejs` (GID 1001) do container, sem
 Error: 7 PERMISSION_DENIED: Permission 'secretmanager.versions.access' denied on resource ...
 ```
 
-**Causa:** Só acontece em dev local (em produção o valor já chega pronto via `--update-secrets`, sem o backend chamar o Secret Manager) — a SA impersonada não tem `roles/secretmanager.secretAccessor` no secret referenciado por um dos `*_ID` (`AZURE_CLIENT_SECRET_ID`, `SESSION_JWT_SECRET_ID`, `AZURE_TENANT_ID_ID`, `AZURE_CLIENT_ID_ID`, `AZURE_ALLOWED_GROUP_ID_ID`), ou o secret não existe com esse nome.
+**Causa:** Só acontece em dev local (em produção o valor já chega pronto via `--update-secrets`, sem o backend chamar o Secret Manager) — a SA impersonada não tem `roles/secretmanager.secretAccessor` num dos 5 secrets (`AZURE_CLIENT_SECRET`, `SESSION_JWT_SECRET`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_ALLOWED_GROUP_ID`), ou o secret não existe com esse nome. Se você declarou manualmente uma das variáveis `*_ID` (`AZURE_CLIENT_SECRET_ID` etc.) em `backend/.env` apontando para um nome diferente, confirme que é esse outro nome que existe e está acessível.
 
 **Solução:** Confirme que os secrets existem (`gcloud secrets list`) e que a SA tem a role no secret específico — ver seção [Segredos no Secret Manager](#segredos-no-secret-manager).
 
@@ -539,28 +562,41 @@ curl -H "Authorization: Bearer $(gcloud auth print-access-token)" \
 
 ## Estrutura de arquivos
 
+Cada arquivo de código tem, na prática, um `*.test.js`/`*.test.jsx` irmão (Jest no backend, Vitest + React Testing Library no frontend — ver nota do [ADR 0001](docs/adr/0001-relatorio-inatividade-on-demand-client-side.md)); omitidos abaixo para focar na estrutura funcional.
+
 ```
 ed-globo/
 ├── docker-compose.yml                 Sobe backend + frontend juntos localmente
 ├── .env.example                       VITE_GCP_PROJECT_ID usado no build do frontend via compose
+├── CONTEXT.md                         Glossário de termos do domínio (Licença, Papel Complementar, Billing Account, etc.)
+├── PRODUCT.md                         Visão de produto
+├── docs/
+│   └── adr/                          Registro de decisões arquiteturais (ADR 0001–0009)
 ├── backend/
 │   ├── Dockerfile                    Multi-stage Node/Express, non-root
 │   ├── .dockerignore
+│   ├── scripts/
+│   │   └── list-billing-services.js  `npm run billing:services` — lista os service.description reais em uso no billing export (apoia a categorização da tela Custos)
 │   ├── src/
-│   │   ├── index.js                  Express server
+│   │   ├── index.js                  Resolve os secrets no boot e só então sobe o app.js (ver ADR 0007)
+│   │   ├── app.js                    Monta o Express app: middlewares, rotas, error handler
 │   │   ├── routes/
 │   │   │   ├── auth.js               Endpoints GET/POST /auth (login/callback/logout/me — SSO)
-│   │   │   ├── iam.js                Endpoints GET/POST/DELETE /api/iam
-│   │   │   └── gemini.js             Endpoints GET/POST/DELETE /api/gemini
+│   │   │   ├── iam.js                Endpoints GET/POST/DELETE /api/iam (inclui grant/revoke de Code Assist)
+│   │   │   ├── gemini.js             Endpoints GET/POST/DELETE /api/gemini
+│   │   │   └── billing.js            Endpoint GET /api/billing/summary
 │   │   ├── middleware/
-│   │   │   └── requireAuth.js        Valida o cookie de sessão nas rotas /api/*
+│   │   │   ├── requireAuth.js        Valida o cookie de sessão nas rotas /api/*
+│   │   │   ├── validateEmail.js      Valida o formato do email no body de POST /users
+│   │   │   └── asyncRoute.js         Wrapper que encaminha erros de handlers async ao error handler do Express
 │   │   └── services/
 │   │       ├── gcpAuth.js            GoogleAuth via ADC (sem chave estática — ver ADR 0007)
-│   │       ├── gcpClients.js         Clientes googleapis (crm, iam)
+│   │       ├── gcpClients.js         Clientes googleapis (crm, iam, bigquery)
 │   │       ├── iamPolicyStore.js     getPolicy / setPolicy (policy v3)
 │   │       ├── principalProbe.js     Probe descartável de validação de principal
-│   │       ├── iamService.js         listUsers / addUser / removeUser
-│   │       ├── geminiService.js      Discovery Engine API
+│   │       ├── iamService.js         listUsers / addUser / removeUser + addCodeAssistUser / removeCodeAssistUser
+│   │       ├── geminiService.js      Discovery Engine API — removeLicense também revoga o IAM (ver ADR 0003)
+│   │       ├── billingService.js     Query no BigQuery Billing Export, categorização (GEMINI/INFRA/uncategorized) e cache de 4h (ver ADR 0006/0008/0009)
 │   │       ├── msalClient.js         ConfidentialClientApplication (Entra ID)
 │   │       ├── graphGroupCheck.js    Checagem de grupo via Microsoft Graph (só no login)
 │   │       ├── sessionToken.js       Assina/valida o JWT de sessão do painel
@@ -573,12 +609,34 @@ ed-globo/
     ├── nginx/
     │   └── default.conf.template     SPA fallback + proxy reverso /api e /auth → BACKEND_URL
     └── src/
-        ├── App.jsx                   Layout sidebar (Ant Design) + gate de autenticação
+        ├── App.jsx                   Layout sidebar retrátil (Ant Design), telas de login/acesso negado e gate de autenticação
+        ├── config.js                 Constantes de polling (BACKGROUND_POLL_INTERVAL_MS, BILLING_POLL_INTERVAL_MS)
+        ├── theme.js                  Tema Ant Design da aplicação
         ├── pages/
-        │   ├── IAMPage.jsx           Tela IAM com polling + CRUD
-        │   └── GeminiPage.jsx        Tela Gemini com subscriptions + CRUD
+        │   ├── DashboardPage.jsx     Visão geral: stat cards, busca cruzada IAM/Gemini, atalho para o Relatório de Inatividade
+        │   ├── IAMPage.jsx           Tela IAM: tabela, adicionar/remover, grant/revoke de Code Assist
+        │   ├── GeminiPage.jsx        Tela Gemini: subscriptions, CRUD, Relatório de Usuários Inativos, Copiar Relatório
+        │   └── BillingPage.jsx       Tela Custos: cards por categoria com drill-down por Serviço/SKU
+        ├── components/
+        │   ├── BillingCategoryCard.jsx      Card de categoria de custo com drill-down inline (Serviço → SKU)
+        │   ├── InactivityReportModal.jsx    Modal do Relatório de Usuários Inativos (cálculo client-side, ver ADR 0001)
+        │   └── CopyUsersReportButton.jsx    Copia a lista completa de usuários com licença (HTML + texto)
+        ├── hooks/
+        │   ├── usePollingFetch.js    Hook genérico de fetch + polling em background, usado pelos três hooks abaixo
+        │   ├── useIamData.js         Dados de /api/iam (polling a cada 3min)
+        │   ├── useGeminiData.js      Dados de /api/gemini (polling a cada 3min)
+        │   └── useBillingData.js     Dados de /api/billing/summary (polling a cada 4h)
+        ├── utils/
+        │   ├── inactivity.js          Regra de Usuário Inativo (ver CONTEXT.md) + geração da tabela para clipboard
+        │   ├── usersReport.js         Geração da tabela completa de usuários para clipboard
+        │   ├── dashboardStats.js      Agregações usadas pelos cards do Dashboard
+        │   ├── billingFormatting.js   Formatação de moeda/valores da tela Custos
+        │   ├── licenseFormatting.jsx  Tags/cores de licença e status de atribuição
+        │   ├── gemini.js              Helpers de dados da tela Gemini
+        │   └── apiError.js            Extração de mensagem de erro das respostas do backend
         └── api/
             ├── auth.js                Cliente axios para /auth/me e /auth/logout
-            ├── iam.js                Cliente axios para /api/iam
-            └── gemini.js             Cliente axios para /api/gemini
+            ├── iam.js                 Cliente axios para /api/iam (inclui addCodeAssist/removeCodeAssist)
+            ├── gemini.js              Cliente axios para /api/gemini
+            └── billing.js             Cliente axios para /api/billing/summary
 ```

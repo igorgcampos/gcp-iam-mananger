@@ -50,10 +50,18 @@ describe('secretManager', () => {
     });
   });
 
-  test('lança erro claro quando nem a env var nem o ID do secret estão configurados', async () => {
-    await expect(
-      resolveSecret('AZURE_CLIENT_SECRET', 'AZURE_CLIENT_SECRET_ID'),
-    ).rejects.toThrow(/AZURE_CLIENT_SECRET_ID/);
+  test('usa o próprio nome da env var como ID do secret quando *_ID não está configurado', async () => {
+    process.env.GCP_PROJECT_ID = 'agentspace-469418';
+    mockAccessSecretVersion.mockResolvedValue([
+      { payload: { data: Buffer.from('valor-secreto') } },
+    ]);
+
+    const value = await resolveSecret('AZURE_CLIENT_SECRET', 'AZURE_CLIENT_SECRET_ID');
+
+    expect(value).toBe('valor-secreto');
+    expect(mockAccessSecretVersion).toHaveBeenCalledWith({
+      name: 'projects/agentspace-469418/secrets/AZURE_CLIENT_SECRET/versions/latest',
+    });
   });
 
   test('lança erro claro quando GCP_PROJECT_ID não está configurado', async () => {
