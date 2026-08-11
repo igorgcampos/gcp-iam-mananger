@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InactivityReportModal from './InactivityReportModal';
@@ -18,6 +18,20 @@ beforeAll(() => {
       dispatchEvent: () => false,
     });
   }
+});
+
+// buildInactivityReport() usa `new Date()` como "agora" por padrão (ver
+// utils/inactivity.js), então os cenários abaixo — escritos para uma data
+// fixa, como em inactivity.test.js — ficam dependentes de quando o teste
+// roda de verdade. Só o relógio (`Date`) é congelado, não os timers
+// (setTimeout/setInterval), pra não travar as esperas internas do userEvent.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-07-16T00:00:00'));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 const configs = [

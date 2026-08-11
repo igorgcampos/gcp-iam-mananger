@@ -10,8 +10,9 @@ import {
   UserAddOutlined, MailOutlined, AppstoreOutlined, InfoCircleOutlined,
 } from '@ant-design/icons';
 import { addGeminiUser, removeGeminiUser } from '../api/gemini';
-import { tierName, tierColor, stateTag, renderLicenseTag } from '../utils/licenseFormatting';
-import { formatDate } from '../utils/gemini';
+import { tierColor, stateTag, renderLicenseTag } from '../utils/licenseFormatting';
+import { buildConfigStats, sumAssigned } from '../utils/dashboardStats';
+import { notifyFetchError } from '../utils/apiError';
 import InactivityReportModal from '../components/InactivityReportModal';
 import CopyUsersReportButton from '../components/CopyUsersReportButton';
 
@@ -37,30 +38,12 @@ export default function GeminiPage({
     if (initialSearch) setSearch(initialSearch);
   }, [initialSearch]);
 
-  const assignedByConfig = useMemo(() => {
-    const map = {};
-    for (const u of users) {
-      if (u.licenseAssignmentState === 'ASSIGNED') {
-        map[u.licenseConfig] = (map[u.licenseConfig] || 0) + 1;
-      }
-    }
-    return map;
-  }, [users]);
+  // Mesmo cálculo usado pelo card "Licenças por camada" do Dashboard — ver
+  // utils/dashboardStats.js, que também blinda licenseCount ausente/inválido
+  // (vira total 0, não NaN).
+  const configStats = useMemo(() => buildConfigStats(configs, users), [configs, users]);
 
-  const totalAssigned = useMemo(
-    () => Object.values(assignedByConfig).reduce((a, b) => a + b, 0),
-    [assignedByConfig]
-  );
-
-  const configStats = useMemo(
-    () => configs.map((c) => {
-      const total = parseInt(c.licenseCount, 10);
-      const assigned = assignedByConfig[c.name] || 0;
-      const label = tierName(c.subscriptionTier);
-      return { ...c, total, assigned, remaining: total - assigned, label, end: formatDate(c.endDate) };
-    }),
-    [configs, assignedByConfig]
-  );
+  const totalAssigned = useMemo(() => sumAssigned(configStats), [configStats]);
 
   useLayoutEffect(() => {
     if (!configStats.length || !contentRef.current || !firstCardRef.current) {
@@ -96,7 +79,7 @@ export default function GeminiPage({
       reload();
     } catch (err) {
       if (err.errorFields) return;
-      message.error(err.response?.data?.error || err.message);
+      notifyFetchError(err);
     } finally {
       setSubmitting(false);
     }
@@ -108,7 +91,7 @@ export default function GeminiPage({
       message.success(`Licença de ${userPrincipal} removida`);
       reload();
     } catch (err) {
-      message.error(err.response?.data?.error || err.message);
+      notifyFetchError(err);
     }
   };
 

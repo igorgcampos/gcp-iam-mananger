@@ -1,4 +1,5 @@
 import { resolveTierName, stateLabel } from './licenseFormatting.jsx';
+import { buildClipboardTable } from './clipboardTable';
 
 export const DEFAULT_INACTIVITY_MONTHS = 2;
 
@@ -53,14 +54,5 @@ export function buildInactivityReportClipboard(report, configs) {
     formatMonthsInactive(u.monthsInactive),
   ]);
 
-  const text = [CLIPBOARD_HEADERS, ...rows].map((row) => row.join('\t')).join('\n');
-
-  const cellStyle = 'border:1px solid #ccc;padding:4px 8px;text-align:left';
-  const headerRow = CLIPBOARD_HEADERS.map((h) => `<th style="${cellStyle};background:#fafafa">${h}</th>`).join('');
-  const bodyRows = rows
-    .map((row) => `<tr>${row.map((cell) => `<td style="${cellStyle}">${cell}</td>`).join('')}</tr>`)
-    .join('');
-  const html = `<table style="border-collapse:collapse;font-family:sans-serif;font-size:13px"><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>`;
-
-  return { html, text };
+  return buildClipboardTable(CLIPBOARD_HEADERS, rows);
 }
