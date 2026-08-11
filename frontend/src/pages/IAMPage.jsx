@@ -7,6 +7,7 @@ import {
   PlusOutlined, DeleteOutlined, ReloadOutlined, KeyOutlined, SearchOutlined, UserAddOutlined, MailOutlined,
 } from '@ant-design/icons';
 import { addIAMUser, removeIAMUser, addCodeAssist, removeCodeAssist } from '../api/iam';
+import { notifyFetchError } from '../utils/apiError';
 
 const { Title, Text } = Typography;
 
@@ -42,7 +43,7 @@ export default function IAMPage({
       reload();
     } catch (err) {
       if (err.errorFields) return;
-      message.error(err.response?.data?.error || err.message);
+      notifyFetchError(err);
     } finally {
       setSubmitting(false);
     }
@@ -54,7 +55,7 @@ export default function IAMPage({
       message.success(`${email} removido`);
       reload();
     } catch (err) {
-      message.error(err.response?.data?.error || err.message);
+      notifyFetchError(err);
     }
   };
 
@@ -65,7 +66,7 @@ export default function IAMPage({
       message.success(`Code Assist concedido a ${email}`);
       reload();
     } catch (err) {
-      message.error(`Code Assist: ${err.response?.data?.error || err.message}`);
+      notifyFetchError(err, 'Code Assist');
     } finally {
       setCodeAssistLoading((prev) => {
         const next = new Set(prev);
@@ -82,7 +83,7 @@ export default function IAMPage({
       message.success(`Code Assist revogado de ${email}`);
       reload();
     } catch (err) {
-      message.error(`Code Assist: ${err.response?.data?.error || err.message}`);
+      notifyFetchError(err, 'Code Assist');
     } finally {
       setCodeAssistLoading((prev) => {
         const next = new Set(prev);

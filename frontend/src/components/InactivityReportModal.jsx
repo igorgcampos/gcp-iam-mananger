@@ -10,6 +10,7 @@ import {
   formatDatePtBr,
   formatMonthsInactive,
 } from '../utils/inactivity';
+import { copyTableToClipboard } from '../utils/clipboardTable';
 
 const { Text } = Typography;
 
@@ -41,18 +42,8 @@ export default function InactivityReportModal({
   );
 
   const handleCopy = async () => {
-    const { html, text } = buildInactivityReportClipboard(report, configs);
     try {
-      if (navigator.clipboard.write && typeof ClipboardItem !== 'undefined') {
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            'text/html': new Blob([html], { type: 'text/html' }),
-            'text/plain': new Blob([text], { type: 'text/plain' }),
-          }),
-        ]);
-      } else {
-        await navigator.clipboard.writeText(text);
-      }
+      await copyTableToClipboard(buildInactivityReportClipboard(report, configs));
       message.success('Tabela copiada!');
     } catch {
       message.error('Não foi possível copiar a tabela.');
