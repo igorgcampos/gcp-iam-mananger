@@ -93,9 +93,38 @@ function categorizeCosts(rows) {
   };
 }
 
+// Custo Gemini por projeto, cross-project (ver ADR 0010): mesmas duas SKUs de
+// GEMINI_SERVICES, mas sem filtro de project.id — cobre a Billing Account
+// inteira, ao contrário de queryCostByService/categorizeCosts, que continuam
+// escopados a homeProjectId. Linhas com project.id nulo (assinaturas
+// faturadas no nível da Billing Account, ver ADR 0008) somam ao bucket de
+// homeProjectId — mesmo critério que a query escopada já usa hoje, não um
+// bucket à parte.
+function groupGeminiByProject(rows, homeProjectId) {
+  const rowsByProject = new Map();
+  rows.forEach((row) => {
+    const key = row.projectId || homeProjectId;
+    if (!rowsByProject.has(key)) rowsByProject.set(key, []);
+    rowsByProject.get(key).push(row);
+  });
+
+  const byProject = {};
+  let total = 0;
+  rowsByProject.forEach((projectRows, key) => {
+    const items = groupByServiceAndSku(projectRows);
+    const projectTotal = round2(items.reduce((sum, s) => sum + s.cost, 0));
+    byProject[key] = { label: key, total: projectTotal, items };
+    total = round2(total + projectTotal);
+  });
+
+  return { total, byProject };
+}
+
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4h — export do GCP só atualiza 1x/dia (ver ADR 0006)
 let cache = { data: null, fetchedAt: 0, inflight: null };
 
+// projectId vem undefined (→ null) para queries cujo schema não tem essa
+// coluna (queryCostByService) — inofensivo, ninguém lê esse campo ali.
 function parseRows(data) {
   if (!data.rows) return [];
   const fields = data.schema.fields.map((f) => f.name);
@@ -103,7 +132,11 @@ function parseRows(data) {
     const obj = {};
     row.f.forEach((cell, i) => { obj[fields[i]] = cell.v; });
     return {
-      service: obj.service, sku: obj.sku ?? 'Outros', cost: parseFloat(obj.cost) || 0, currency: obj.currency,
+      projectId: obj.projectId ?? null,
+      service: obj.service,
+      sku: obj.sku ?? 'Outros',
+      cost: parseFloat(obj.cost) || 0,
+      currency: obj.currency,
     };
   });
 }
@@ -153,15 +186,55 @@ async function queryCostByService() {
   return parseRows(res.data);
 }
 
+async function queryGeminiCostByProject() {
+  const projectId = process.env.GCP_PROJECT_ID;
+  const table = process.env.BILLING_EXPORT_TABLE;
+
+  const query = `
+    SELECT
+      project.id AS projectId,
+      service.description AS service,
+      IFNULL(sku.description, 'Outros') AS sku,
+      SUM(cost) + IFNULL(SUM((SELECT SUM(c.amount) FROM UNNEST(credits) AS c)), 0) AS cost,
+      ANY_VALUE(currency) AS currency
+    FROM \`${table}\`
+    WHERE service.description IN UNNEST(@geminiServices)
+      AND usage_start_time >= TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
+    GROUP BY projectId, service, sku
+  `;
+
+  const res = await bigquery.jobs.query({
+    projectId,
+    requestBody: {
+      query,
+      useLegacySql: false,
+      parameterMode: 'NAMED',
+      queryParameters: [
+        {
+          name: 'geminiServices',
+          parameterType: { type: 'ARRAY', arrayType: { type: 'STRING' } },
+          parameterValue: { arrayValues: GEMINI_SERVICES.map((v) => ({ value: v })) },
+        },
+      ],
+    },
+  });
+
+  return parseRows(res.data);
+}
+
 async function getBillingSummary() {
   const isFresh = cache.data && (Date.now() - cache.fetchedAt) < CACHE_TTL_MS;
   if (isFresh) return cache.data;
 
   if (cache.inflight) return cache.inflight;
 
-  const inflight = queryCostByService()
-    .then((rows) => {
-      const summary = { ...categorizeCosts(rows), updatedAt: new Date().toISOString() };
+  const inflight = Promise.all([queryCostByService(), queryGeminiCostByProject()])
+    .then(([rows, geminiProjectRows]) => {
+      const summary = {
+        ...categorizeCosts(rows),
+        geminiByProject: groupGeminiByProject(geminiProjectRows, process.env.GCP_PROJECT_ID),
+        updatedAt: new Date().toISOString(),
+      };
       cache = { data: summary, fetchedAt: Date.now(), inflight: null };
       return summary;
     })
@@ -175,5 +248,5 @@ async function getBillingSummary() {
 }
 
 module.exports = {
-  categorizeCosts, getBillingSummary, GEMINI_SERVICES, INFRA_SERVICES,
+  categorizeCosts, groupGeminiByProject, getBillingSummary, GEMINI_SERVICES, INFRA_SERVICES,
 };

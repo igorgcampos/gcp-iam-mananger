@@ -1,0 +1,15 @@
+# Custo Gemini ganha uma vista cross-project, desacoplada do Custo do Projeto
+
+O painel foi construído com escopo deliberado de projeto único (ver [ADR 0006](0006-billing-export-como-fonte-de-custos.md)): tudo na página de Billing é sobre `agentspace-469418`. Mas a Billing Account "Projetos Editora Globo" cobre 71 projetos, e havia uma pergunta real sem resposta: quanto os outros projetos estão gastando em `Vertex AI`/`Vertex AI Search`? Decidimos adicionar, só ao card Custo Gemini, um seletor de projeto (padrão "Todos os projetos") alimentado por uma segunda query — filtrando exclusivamente as duas SKUs Gemini (`GEMINI_SERVICES`), sem filtro de `project.id`, agrupando por projeto. A query original (Infra/Outros/Total) não muda. Linhas sem `project.id` (assinaturas faturadas no nível da Billing Account, ver [ADR 0008](0008-custo-gemini-inclui-assinaturas-sem-project-id.md)) somam ao bucket de `agentspace-469418` — o mesmo critério que a query escopada já usa hoje, e não um projeto especial à parte, porque essas assinaturas são do Agentspace especificamente.
+
+## Considered Options
+
+- **Ampliar a query existente, removendo o filtro de projeto para todos os serviços**: descartada — escanearia todos os serviços de todos os 71 projetos no BigQuery só para descartar quase tudo em memória, custando muito mais bytes escaneados do que uma query estreita filtrando só pelas 2 SKUs Gemini.
+- **Manter a invariante `Custo do Projeto = Gemini + Infra + Outros` também para a vista cross-project**, criando um card separado "Gemini em outros projetos" que não entra na soma: descartada — o pedido era ver o número no mesmo card Gemini, e um card espelhado teria o mesmo problema de "dois números pra somar" que o ADR 0008 já rejeitou uma vez.
+- **Lista estática de projetos conhecidos** (env var, como `GEMINI_SERVICES`): descartada — a lista de projetos com gasto Gemini já vem de graça no resultado da query agrupada por `project.id`; manter uma lista separada seria uma segunda fonte de verdade sem necessidade.
+
+## Consequences
+
+- A invariante "as três parcelas sempre somam o Custo do Projeto" deixa de valer quando o Custo Gemini está exibindo "Todos os projetos" ou outro projeto que não `agentspace-469418` — é uma vista adicional, não uma parcela do total. Documentado em `CONTEXT.md`.
+- A página de Billing passa a rodar duas queries no BigQuery por refresh (a existente, escopada a `agentspace-469418`, e a nova, cross-project só das SKUs Gemini), ambas sob o mesmo cache de 4h e o mesmo botão "Atualizar" — sem cache/ciclo de vida separado.
+- O risco de colisão em linhas sem `project.id`, aceito no ADR 0008 (duas assinaturas Gemini de projetos diferentes ficando indistinguíveis), continua valendo igual na vista cross-project: essas linhas somam ao bucket de `agentspace-469418`, então uma eventual assinatura de outro projeto faturada sem `project.id` apareceria, por engano, dentro do número do Agentspace — mesma mitigação do ADR 0008 (lista `GEMINI_SERVICES` curta e deliberada).

@@ -1,4 +1,4 @@
-const { categorizeCosts, GEMINI_SERVICES } = require('./billingService');
+const { categorizeCosts, groupGeminiByProject, GEMINI_SERVICES } = require('./billingService');
 
 const OLD_ENV = process.env;
 
@@ -17,6 +17,23 @@ function mockQueryResult(rows) {
       })),
     },
   };
+}
+
+function mockProjectQueryResult(rows) {
+  return {
+    data: {
+      schema: { fields: [{ name: 'projectId' }, { name: 'service' }, { name: 'sku' }, { name: 'cost' }, { name: 'currency' }] },
+      rows: rows.map(({
+        projectId, service, sku, cost, currency,
+      }) => ({
+        f: [{ v: projectId }, { v: service }, { v: sku }, { v: String(cost) }, { v: currency }],
+      })),
+    },
+  };
+}
+
+function hasProjectIdParam(args) {
+  return args.requestBody.queryParameters.some((p) => p.name === 'projectId');
 }
 
 describe('getBillingSummary', () => {
@@ -51,8 +68,8 @@ describe('getBillingSummary', () => {
     });
     expect(summary.items.gemini).toEqual([{ service: 'Vertex AI Search', cost: 100, skus: [{ sku: 'Query API', cost: 100 }] }]);
     expect(summary.updatedAt).toBeDefined();
-    expect(queryMock).toHaveBeenCalledTimes(1);
-    const [call] = queryMock.mock.calls[0];
+    expect(queryMock).toHaveBeenCalledTimes(2);
+    const [call] = queryMock.mock.calls.find(([args]) => hasProjectIdParam(args));
     expect(call.projectId).toBe('agentspace-469418');
     expect(call.requestBody.queryParameters[0].parameterValue.value).toBe('agentspace-469418');
   });
@@ -80,10 +97,11 @@ describe('getBillingSummary', () => {
     await getBillingSummary();
     await getBillingSummary();
 
-    expect(queryMock).toHaveBeenCalledTimes(1);
+    // 2 chamadas (query escopada + query cross-project) num único fetch, não 4
+    expect(queryMock).toHaveBeenCalledTimes(2);
   });
 
-  test('refaz a query depois que o TTL do cache expira', async () => {
+  test('refaz as duas queries depois que o TTL do cache expira', async () => {
     queryMock.mockResolvedValue(mockQueryResult([{
       service: 'Cloud Run', sku: 'CPU Allocation Time', cost: 1, currency: 'BRL',
     }]));
@@ -92,7 +110,7 @@ describe('getBillingSummary', () => {
     jest.advanceTimersByTime(5 * 60 * 60 * 1000); // 5h > TTL de 4h
     await getBillingSummary();
 
-    expect(queryMock).toHaveBeenCalledTimes(2);
+    expect(queryMock).toHaveBeenCalledTimes(4);
   });
 
   test('chamadas concorrentes com cache vazio compartilham a mesma query em andamento', async () => {
@@ -102,7 +120,7 @@ describe('getBillingSummary', () => {
 
     const [a, b] = await Promise.all([getBillingSummary(), getBillingSummary()]);
 
-    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(queryMock).toHaveBeenCalledTimes(2);
     expect(a).toEqual(b);
   });
 
@@ -114,6 +132,114 @@ describe('getBillingSummary', () => {
     const summary = await getBillingSummary();
 
     expect(summary.items.infra).toEqual([{ service: 'Cloud Run', cost: 5, skus: [{ sku: 'Outros', cost: 5 }] }]);
+  });
+
+  test('também consulta o custo Gemini por projeto, sem filtro de project.id, e devolve em geminiByProject', async () => {
+    queryMock.mockImplementation((args) => {
+      if (hasProjectIdParam(args)) {
+        return Promise.resolve(mockQueryResult([
+          { service: 'Vertex AI Search', sku: 'Query API', cost: 100, currency: 'BRL' },
+        ]));
+      }
+      return Promise.resolve(mockProjectQueryResult([
+        { projectId: 'agentspace-469418', service: 'Vertex AI Search', sku: 'Query API', cost: 100, currency: 'BRL' },
+        { projectId: 'outro-projeto', service: 'Vertex AI', sku: 'Online Prediction', cost: 15, currency: 'BRL' },
+      ]));
+    });
+
+    const summary = await getBillingSummary();
+
+    expect(summary.geminiByProject.total).toBe(115);
+    expect(summary.geminiByProject.byProject['agentspace-469418']).toEqual({
+      label: 'agentspace-469418',
+      total: 100,
+      items: [{ service: 'Vertex AI Search', cost: 100, skus: [{ sku: 'Query API', cost: 100 }] }],
+    });
+    expect(summary.geminiByProject.byProject['outro-projeto']).toEqual({
+      label: 'outro-projeto',
+      total: 15,
+      items: [{ service: 'Vertex AI', cost: 15, skus: [{ sku: 'Online Prediction', cost: 15 }] }],
+    });
+  });
+
+  test('linhas sem project.id na query cross-project somam ao bucket do agentspace-469418 (projeto desta app)', async () => {
+    queryMock.mockImplementation((args) => {
+      if (hasProjectIdParam(args)) return Promise.resolve(mockQueryResult([]));
+      return Promise.resolve(mockProjectQueryResult([
+        { projectId: null, service: 'Vertex AI Search', sku: 'Gemini Enterprise Standard: Subscription - one year term', cost: 1000, currency: 'BRL' },
+        { projectId: 'agentspace-469418', service: 'Vertex AI Search', sku: 'Query API', cost: 100, currency: 'BRL' },
+      ]));
+    });
+
+    const summary = await getBillingSummary();
+
+    expect(summary.geminiByProject.byProject['agentspace-469418'].total).toBe(1100);
+    expect(Object.keys(summary.geminiByProject.byProject)).toEqual(['agentspace-469418']);
+  });
+
+  test('a query cross-project não envia project.id como parâmetro, só geminiServices', async () => {
+    queryMock.mockResolvedValue(mockQueryResult([]));
+
+    await getBillingSummary();
+
+    const call = queryMock.mock.calls.find(([args]) => !hasProjectIdParam(args));
+    expect(call).toBeDefined();
+    const [args] = call;
+    expect(args.requestBody.queryParameters).toEqual([
+      {
+        name: 'geminiServices',
+        parameterType: { type: 'ARRAY', arrayType: { type: 'STRING' } },
+        parameterValue: { arrayValues: GEMINI_SERVICES.map((v) => ({ value: v })) },
+      },
+    ]);
+  });
+});
+
+describe('groupGeminiByProject', () => {
+  test('agrupa por project.id, com total e items por Serviço/SKU dentro de cada projeto', () => {
+    const rows = [
+      { projectId: 'projeto-a', service: 'Vertex AI', sku: 'Online Prediction', cost: 30, currency: 'BRL' },
+      { projectId: 'projeto-b', service: 'Vertex AI Search', sku: 'Query API', cost: 20, currency: 'BRL' },
+    ];
+
+    const result = groupGeminiByProject(rows, 'agentspace-469418');
+
+    expect(result.total).toBe(50);
+    expect(result.byProject['projeto-a']).toEqual({
+      label: 'projeto-a',
+      total: 30,
+      items: [{ service: 'Vertex AI', cost: 30, skus: [{ sku: 'Online Prediction', cost: 30 }] }],
+    });
+    expect(result.byProject['projeto-b']).toEqual({
+      label: 'projeto-b',
+      total: 20,
+      items: [{ service: 'Vertex AI Search', cost: 20, skus: [{ sku: 'Query API', cost: 20 }] }],
+    });
+  });
+
+  test('linhas com project.id nulo somam ao bucket do projeto desta app (homeProjectId), igual à query escopada (ADR 0008)', () => {
+    const rows = [
+      {
+        projectId: null,
+        service: 'Vertex AI Search',
+        sku: 'Gemini Enterprise Standard: Subscription - one year term',
+        cost: 1000,
+        currency: 'BRL',
+      },
+      { projectId: 'agentspace-469418', service: 'Vertex AI Search', sku: 'Query API', cost: 50, currency: 'BRL' },
+      { projectId: 'projeto-a', service: 'Vertex AI', sku: 'Online Prediction', cost: 30, currency: 'BRL' },
+    ];
+
+    const result = groupGeminiByProject(rows, 'agentspace-469418');
+
+    expect(Object.keys(result.byProject).sort()).toEqual(['agentspace-469418', 'projeto-a']);
+    expect(result.byProject['agentspace-469418'].total).toBe(1050);
+    expect(result.byProject['projeto-a'].total).toBe(30);
+    expect(result.total).toBe(1080);
+  });
+
+  test('lista vazia retorna total zero e nenhum projeto', () => {
+    expect(groupGeminiByProject([], 'agentspace-469418')).toEqual({ total: 0, byProject: {} });
   });
 });
 
