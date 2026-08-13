@@ -28,16 +28,20 @@ const { getBillingSummary } = require('../services/billingService');
 describe('GET /api/billing/summary', () => {
   test('retorna o resumo com status 200', async () => {
     const summary = {
-      gemini: 100,
+      licenses: 100,
+      vertexApi: 0,
       infra: 10,
       uncategorized: 0,
       total: 110,
       currency: 'BRL',
       items: {
-        gemini: [{ service: 'Vertex AI Search', cost: 100, skus: [{ sku: 'Query API', cost: 100 }] }],
+        licenses: [{ service: 'Vertex AI Search', cost: 100, skus: [{ sku: 'Query API', cost: 100 }] }],
+        vertexApi: [],
         infra: [{ service: 'Cloud Run', cost: 10, skus: [{ sku: 'CPU Allocation Time', cost: 10 }] }],
         uncategorized: [],
       },
+      licensesByProject: { total: 100, byProject: {} },
+      apiByProject: { total: 0, byProject: {} },
       updatedAt: '2026-08-06T12:00:00.000Z',
     };
     getBillingSummary.mockResolvedValue(summary);

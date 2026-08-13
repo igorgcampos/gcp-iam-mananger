@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Card, Statistic, Typography, Space,
+  Card, Statistic, Typography, Space, Select,
 } from 'antd';
 import { DownOutlined, UpOutlined } from '@ant-design/icons';
 import { formatCurrency } from '../utils/billingFormatting';
@@ -8,7 +8,7 @@ import { formatCurrency } from '../utils/billingFormatting';
 const { Text } = Typography;
 
 export default function BillingCategoryCard({
-  icon, iconBg, iconColor, label, value, hint, items, currency,
+  icon, iconBg, iconColor, label, value, hint, items, currency, filter,
 }) {
   const [expanded, setExpanded] = useState(false);
   const expandable = Array.isArray(items);
@@ -28,7 +28,11 @@ export default function BillingCategoryCard({
       } : undefined}
     >
       <Space align="center" size={12} style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Space align="center" size={12}>
+        {/* flexShrink: 0 — o rótulo nunca deve ceder espaço pro seletor; sem
+            isso, um nome de projeto longo no filter espreme o rótulo até ele
+            quebrar linha (ex: "Licen/ças"). Quem cede é o seletor, truncando
+            com reticências (ver maxWidth/minWidth abaixo). */}
+        <Space align="center" size={12} style={{ flexShrink: 0 }}>
           {icon && (
             <div
               style={{
@@ -39,13 +43,41 @@ export default function BillingCategoryCard({
               {icon}
             </div>
           )}
-          <Text strong type="secondary" style={{ fontSize: 13 }}>{label}</Text>
+          <Text strong type="secondary" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{label}</Text>
         </Space>
-        {expandable && (
-          expanded
-            ? <UpOutlined data-testid="billing-category-chevron" style={{ color: '#94a3b8', fontSize: 12 }} />
-            : <DownOutlined data-testid="billing-category-chevron" style={{ color: '#94a3b8', fontSize: 12 }} />
-        )}
+        <Space align="center" size={8} style={{ minWidth: 0, flex: '1 1 auto', justifyContent: 'flex-end' }}>
+          {filter && (
+            // Seletor de projeto embutido no card (não fora dele) pra não
+            // desalinhar os cards vizinhos que não têm filtro — ver ADR 0011.
+            // stopPropagation pra abrir o dropdown sem também expandir/recolher
+            // o drill-down do card (o Card inteiro tem onClick de expandir).
+            // minWidth: 0 no wrapper é o que permite o Select encolher abaixo
+            // do tamanho do texto e truncar com reticências, em vez de
+            // estourar a largura do card (comportamento padrão de flex item).
+            <div
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              role="presentation"
+              style={{ minWidth: 0, maxWidth: 160 }}
+            >
+              <Select
+                size="small"
+                variant="borderless"
+                virtual={false}
+                popupMatchSelectWidth={false}
+                value={filter.value}
+                onChange={filter.onChange}
+                options={filter.options}
+                style={{ width: '100%', minWidth: 0 }}
+              />
+            </div>
+          )}
+          {expandable && (
+            expanded
+              ? <UpOutlined data-testid="billing-category-chevron" style={{ color: '#94a3b8', fontSize: 12 }} />
+              : <DownOutlined data-testid="billing-category-chevron" style={{ color: '#94a3b8', fontSize: 12 }} />
+          )}
+        </Space>
       </Space>
 
       <div style={{
