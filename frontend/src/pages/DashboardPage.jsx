@@ -70,9 +70,32 @@ export default function DashboardPage({
     reloadGemini();
   };
 
+  // Base para o NUMERADOR do card Code Assist: só usuários IAM que também têm
+  // Licença Gemini atribuída, porque Code Assist é um papel IAM adicional
+  // (iamService.js) — não existe para quem não está na lista de IAM. Já o
+  // DENOMINADOR do card usa totalAssigned (todas as licenças ASSIGNED no
+  // Gemini Enterprise, mesmo sem par no IAM), pois o acoplamento entre
+  // licença e papel IAM é unidirecional (ver ADR 0003): pode haver licença
+  // atribuída a alguém que nunca ganhou o papel IAM, e esse alguém conta
+  // corretamente como "sem acesso ao Code Assist".
+  const licensedEmails = useMemo(() => {
+    const set = new Set();
+    geminiUsers.forEach((u) => {
+      if (u.licenseAssignmentState === 'ASSIGNED' && u.userPrincipal) {
+        set.add(u.userPrincipal.toLowerCase());
+      }
+    });
+    return set;
+  }, [geminiUsers]);
+
+  const licensedIamUsers = useMemo(
+    () => iamUsers.filter((u) => licensedEmails.has((u.email || '').toLowerCase())),
+    [iamUsers, licensedEmails]
+  );
+
   const codeAssistCount = useMemo(
-    () => iamUsers.filter((u) => u.codeAssist).length,
-    [iamUsers]
+    () => licensedIamUsers.filter((u) => u.codeAssist).length,
+    [licensedIamUsers]
   );
 
   const configStats = useMemo(
@@ -210,7 +233,7 @@ export default function DashboardPage({
                 iconColor="#4f46e5"
                 label="Code Assist"
                 value={codeAssistCount}
-                hint={iamUsers.length ? `${Math.round((codeAssistCount / iamUsers.length) * 100)}% do total` : undefined}
+                hint={totalAssigned ? `${Math.round((codeAssistCount / totalAssigned) * 100)}% do total` : undefined}
               />
               <StatCard
                 icon={<RobotOutlined />}
@@ -255,16 +278,16 @@ export default function DashboardPage({
                     }}
                     >
                       <Tag color="blue" style={{ margin: 0 }}>Code Assist</Tag>
-                      <Text strong style={{ color: '#4f46e5' }}>{codeAssistCount} / {iamUsers.length}</Text>
+                      <Text strong style={{ color: '#4f46e5' }}>{codeAssistCount} / {totalAssigned}</Text>
                     </div>
                     <Progress
-                      percent={iamUsers.length ? Math.round((codeAssistCount / iamUsers.length) * 100) : 0}
+                      percent={totalAssigned ? Math.round((codeAssistCount / totalAssigned) * 100) : 0}
                       size="small"
                       strokeColor="#4f46e5"
                       showInfo={false}
                     />
                     <Text type="secondary" style={{ fontSize: 12, marginTop: 6, display: 'block' }}>
-                      {iamUsers.length - codeAssistCount} usuário{iamUsers.length - codeAssistCount !== 1 ? 's' : ''} sem acesso às ferramentas de IA
+                      {totalAssigned - codeAssistCount} usuário{totalAssigned - codeAssistCount !== 1 ? 's' : ''} sem acesso às ferramentas de IA
                     </Text>
                   </div>
                   <div style={{
