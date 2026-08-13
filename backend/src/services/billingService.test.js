@@ -1,6 +1,9 @@
-const { categorizeCosts, groupGeminiByProject, GEMINI_SERVICES } = require('./billingService');
+const {
+  categorizeCosts, groupCostByProject, LICENSE_SERVICES, API_SERVICES,
+} = require('./billingService');
 
 const OLD_ENV = process.env;
+const VERTEX_SERVICES = [...LICENSE_SERVICES, ...API_SERVICES];
 
 jest.mock('./gcpClients', () => ({
   bigquery: { jobs: { query: jest.fn() } },
@@ -64,9 +67,9 @@ describe('getBillingSummary', () => {
     const summary = await getBillingSummary();
 
     expect(summary).toMatchObject({
-      gemini: 100, infra: 10, uncategorized: 0, total: 110, currency: 'BRL',
+      licenses: 100, vertexApi: 0, infra: 10, uncategorized: 0, total: 110, currency: 'BRL',
     });
-    expect(summary.items.gemini).toEqual([{ service: 'Vertex AI Search', cost: 100, skus: [{ sku: 'Query API', cost: 100 }] }]);
+    expect(summary.items.licenses).toEqual([{ service: 'Vertex AI Search', cost: 100, skus: [{ sku: 'Query API', cost: 100 }] }]);
     expect(summary.updatedAt).toBeDefined();
     expect(queryMock).toHaveBeenCalledTimes(2);
     const [call] = queryMock.mock.calls.find(([args]) => hasProjectIdParam(args));
@@ -74,7 +77,7 @@ describe('getBillingSummary', () => {
     expect(call.requestBody.queryParameters[0].parameterValue.value).toBe('agentspace-469418');
   });
 
-  test('a query passa GEMINI_SERVICES como parâmetro, pra pegar assinaturas sem project.id', async () => {
+  test('a query passa LICENSE_SERVICES + API_SERVICES como parâmetro, pra pegar assinaturas sem project.id', async () => {
     queryMock.mockResolvedValue(mockQueryResult([{
       service: 'Cloud Run', sku: 'CPU Allocation Time', cost: 1, currency: 'BRL',
     }]));
@@ -85,7 +88,7 @@ describe('getBillingSummary', () => {
     const geminiParam = call.requestBody.queryParameters.find((p) => p.name === 'geminiServices');
     expect(geminiParam.parameterType).toEqual({ type: 'ARRAY', arrayType: { type: 'STRING' } });
     expect(geminiParam.parameterValue.arrayValues).toEqual(
-      GEMINI_SERVICES.map((v) => ({ value: v }))
+      VERTEX_SERVICES.map((v) => ({ value: v })),
     );
   });
 
@@ -134,7 +137,7 @@ describe('getBillingSummary', () => {
     expect(summary.items.infra).toEqual([{ service: 'Cloud Run', cost: 5, skus: [{ sku: 'Outros', cost: 5 }] }]);
   });
 
-  test('também consulta o custo Gemini por projeto, sem filtro de project.id, e devolve em geminiByProject', async () => {
+  test('também consulta o custo Vertex por projeto, sem filtro de project.id, e devolve dividido em licensesByProject/apiByProject (ADR 0011)', async () => {
     queryMock.mockImplementation((args) => {
       if (hasProjectIdParam(args)) {
         return Promise.resolve(mockQueryResult([
@@ -149,17 +152,21 @@ describe('getBillingSummary', () => {
 
     const summary = await getBillingSummary();
 
-    expect(summary.geminiByProject.total).toBe(115);
-    expect(summary.geminiByProject.byProject['agentspace-469418']).toEqual({
+    expect(summary.licensesByProject.total).toBe(100);
+    expect(summary.licensesByProject.byProject['agentspace-469418']).toEqual({
       label: 'agentspace-469418',
       total: 100,
       items: [{ service: 'Vertex AI Search', cost: 100, skus: [{ sku: 'Query API', cost: 100 }] }],
     });
-    expect(summary.geminiByProject.byProject['outro-projeto']).toEqual({
+    expect(summary.licensesByProject.byProject['outro-projeto']).toBeUndefined();
+
+    expect(summary.apiByProject.total).toBe(15);
+    expect(summary.apiByProject.byProject['outro-projeto']).toEqual({
       label: 'outro-projeto',
       total: 15,
       items: [{ service: 'Vertex AI', cost: 15, skus: [{ sku: 'Online Prediction', cost: 15 }] }],
     });
+    expect(summary.apiByProject.byProject['agentspace-469418']).toBeUndefined();
   });
 
   test('linhas sem project.id na query cross-project somam ao bucket do agentspace-469418 (projeto desta app)', async () => {
@@ -173,8 +180,8 @@ describe('getBillingSummary', () => {
 
     const summary = await getBillingSummary();
 
-    expect(summary.geminiByProject.byProject['agentspace-469418'].total).toBe(1100);
-    expect(Object.keys(summary.geminiByProject.byProject)).toEqual(['agentspace-469418']);
+    expect(summary.licensesByProject.byProject['agentspace-469418'].total).toBe(1100);
+    expect(Object.keys(summary.licensesByProject.byProject)).toEqual(['agentspace-469418']);
   });
 
   test('a query cross-project não envia project.id como parâmetro, só geminiServices', async () => {
@@ -189,20 +196,20 @@ describe('getBillingSummary', () => {
       {
         name: 'geminiServices',
         parameterType: { type: 'ARRAY', arrayType: { type: 'STRING' } },
-        parameterValue: { arrayValues: GEMINI_SERVICES.map((v) => ({ value: v })) },
+        parameterValue: { arrayValues: VERTEX_SERVICES.map((v) => ({ value: v })) },
       },
     ]);
   });
 });
 
-describe('groupGeminiByProject', () => {
+describe('groupCostByProject', () => {
   test('agrupa por project.id, com total e items por Serviço/SKU dentro de cada projeto', () => {
     const rows = [
       { projectId: 'projeto-a', service: 'Vertex AI', sku: 'Online Prediction', cost: 30, currency: 'BRL' },
       { projectId: 'projeto-b', service: 'Vertex AI Search', sku: 'Query API', cost: 20, currency: 'BRL' },
     ];
 
-    const result = groupGeminiByProject(rows, 'agentspace-469418');
+    const result = groupCostByProject(rows, 'agentspace-469418');
 
     expect(result.total).toBe(50);
     expect(result.byProject['projeto-a']).toEqual({
@@ -227,10 +234,10 @@ describe('groupGeminiByProject', () => {
         currency: 'BRL',
       },
       { projectId: 'agentspace-469418', service: 'Vertex AI Search', sku: 'Query API', cost: 50, currency: 'BRL' },
-      { projectId: 'projeto-a', service: 'Vertex AI', sku: 'Online Prediction', cost: 30, currency: 'BRL' },
+      { projectId: 'projeto-a', service: 'Vertex AI Search', sku: 'Query API', cost: 30, currency: 'BRL' },
     ];
 
-    const result = groupGeminiByProject(rows, 'agentspace-469418');
+    const result = groupCostByProject(rows, 'agentspace-469418');
 
     expect(Object.keys(result.byProject).sort()).toEqual(['agentspace-469418', 'projeto-a']);
     expect(result.byProject['agentspace-469418'].total).toBe(1050);
@@ -239,12 +246,12 @@ describe('groupGeminiByProject', () => {
   });
 
   test('lista vazia retorna total zero e nenhum projeto', () => {
-    expect(groupGeminiByProject([], 'agentspace-469418')).toEqual({ total: 0, byProject: {} });
+    expect(groupCostByProject([], 'agentspace-469418')).toEqual({ total: 0, byProject: {} });
   });
 });
 
 describe('categorizeCosts', () => {
-  test('soma Gemini, Infra e Outros Serviços, e eles fecham com o total', () => {
+  test('soma Licenças, API, Infra e Outros Serviços, e eles fecham com o total', () => {
     const rows = [
       { service: 'Vertex AI Search', sku: 'Vertex AI Search Query API', cost: 1696.14, currency: 'BRL' },
       { service: 'Cloud Run', sku: 'Cloud Run - CPU Allocation Time', cost: 42.5, currency: 'BRL' },
@@ -254,11 +261,12 @@ describe('categorizeCosts', () => {
 
     const result = categorizeCosts(rows);
 
-    expect(result.gemini).toBe(1696.14);
+    expect(result.licenses).toBe(1696.14);
+    expect(result.vertexApi).toBe(0);
     expect(result.infra).toBe(45.7);
     expect(result.uncategorized).toBe(7.1);
     expect(result.total).toBeCloseTo(1748.94, 2);
-    expect(result.total).toBeCloseTo(result.gemini + result.infra + result.uncategorized, 2);
+    expect(result.total).toBeCloseTo(result.licenses + result.vertexApi + result.infra + result.uncategorized, 2);
   });
 
   test('categoriza Cloud Storage e Secret Manager como Infra (infra genérica de nuvem, não só o que a app usa — ADR 0009)', () => {
@@ -281,12 +289,15 @@ describe('categorizeCosts', () => {
   test('retorna zeros, moeda padrão BRL e items vazios para lista vazia', () => {
     const result = categorizeCosts([]);
     expect(result).toEqual({
-      gemini: 0,
+      licenses: 0,
+      vertexApi: 0,
       infra: 0,
       uncategorized: 0,
       total: 0,
       currency: 'BRL',
-      items: { gemini: [], infra: [], uncategorized: [] },
+      items: {
+        licenses: [], vertexApi: [], infra: [], uncategorized: [],
+      },
     });
   });
 
@@ -295,16 +306,17 @@ describe('categorizeCosts', () => {
       { service: 'Vertex AI Search', sku: 'Vertex AI Search Query API', cost: 0.1, currency: 'BRL' },
       { service: 'Vertex AI Search', sku: 'Vertex AI Search Query API', cost: 0.2, currency: 'BRL' },
     ];
-    expect(categorizeCosts(rows).gemini).toBe(0.3);
+    expect(categorizeCosts(rows).licenses).toBe(0.3);
   });
 
-  test('categoriza "Vertex AI" (sem "Search") também como Gemini', () => {
+  test('categoriza "Vertex AI" (sem "Search") como Custo de API, separado de Licenças', () => {
     const result = categorizeCosts([{ service: 'Vertex AI', sku: 'Vertex AI Online Prediction', cost: 40.73, currency: 'BRL' }]);
-    expect(result.gemini).toBe(40.73);
+    expect(result.vertexApi).toBe(40.73);
+    expect(result.licenses).toBe(0);
     expect(result.uncategorized).toBe(0);
   });
 
-  test('agrupa items por Serviço e, dentro de cada um, por SKU', () => {
+  test('agrupa items por Serviço e, dentro de cada um, por SKU, em items.licenses e items.vertexApi separados', () => {
     const rows = [
       { service: 'Vertex AI Search', sku: 'Query API', cost: 100, currency: 'BRL' },
       { service: 'Vertex AI Search', sku: 'Storage', cost: 50, currency: 'BRL' },
@@ -313,7 +325,7 @@ describe('categorizeCosts', () => {
 
     const { items } = categorizeCosts(rows);
 
-    expect(items.gemini).toEqual([
+    expect(items.licenses).toEqual([
       {
         service: 'Vertex AI Search',
         cost: 150,
@@ -322,6 +334,8 @@ describe('categorizeCosts', () => {
           { sku: 'Storage', cost: 50 },
         ],
       },
+    ]);
+    expect(items.vertexApi).toEqual([
       { service: 'Vertex AI', cost: 30, skus: [{ sku: 'Online Prediction', cost: 30 }] },
     ]);
     expect(items.infra).toEqual([]);

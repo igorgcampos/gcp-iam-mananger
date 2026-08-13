@@ -3,10 +3,19 @@ const { bigquery } = require('./gcpClients');
 // Listas de service.description (schema do BigQuery Billing Export) que
 // compõem cada categoria — editar aqui quando a aplicação passar a usar (ou
 // parar de usar) um serviço GCP. Ver Task 2 (backend/scripts/list-billing-services.js)
-// para descobrir os nomes reais em uso. Qualquer serviço fora das duas listas
-// cai em "uncategorized" (rótulo "Outros Serviços" na UI) — de propósito, ver
+// para descobrir os nomes reais em uso. Qualquer serviço fora das listas
+// abaixo cai em "uncategorized" (rótulo "Outros Serviços" na UI) — de propósito, ver
 // CONTEXT.md ("Outros Serviços") e ADR 0009.
-const GEMINI_SERVICES = ['Vertex AI Search', 'Vertex AI'];
+//
+// LICENSE_SERVICES e API_SERVICES eram uma lista única (GEMINI_SERVICES) até a
+// ADR 0011, que as separou em duas categorias de domínio — Custo de Licenças
+// (assinatura) e Custo de API (consumo) — porque a distinção entre elas vai
+// ficar cada vez mais relevante. Continuam sendo tratadas juntas sempre que o
+// motivo for técnico e não de domínio (ex: a exceção de project.id nulo do
+// ADR 0008, ou a query cross-project do ADR 0010).
+const LICENSE_SERVICES = ['Vertex AI Search'];
+const API_SERVICES = ['Vertex AI'];
+const VERTEX_SERVICES = [...LICENSE_SERVICES, ...API_SERVICES];
 
 // INFRA_SERVICES é a infraestrutura "clássica" de nuvem (compute, storage,
 // banco, rede, segurança, devops, observabilidade, mensageria) — não se
@@ -59,13 +68,17 @@ function groupByServiceAndSku(rows) {
 }
 
 function categorizeCosts(rows) {
-  const buckets = { gemini: [], infra: [], uncategorized: [] };
+  const buckets = {
+    licenses: [], vertexApi: [], infra: [], uncategorized: [],
+  };
   let currency = null;
 
   rows.forEach((row) => {
     currency = currency || row.currency;
-    if (GEMINI_SERVICES.includes(row.service)) {
-      buckets.gemini.push(row);
+    if (LICENSE_SERVICES.includes(row.service)) {
+      buckets.licenses.push(row);
+    } else if (API_SERVICES.includes(row.service)) {
+      buckets.vertexApi.push(row);
     } else if (INFRA_SERVICES.includes(row.service)) {
       buckets.infra.push(row);
     } else {
@@ -74,33 +87,37 @@ function categorizeCosts(rows) {
   });
 
   const items = {
-    gemini: groupByServiceAndSku(buckets.gemini),
+    licenses: groupByServiceAndSku(buckets.licenses),
+    vertexApi: groupByServiceAndSku(buckets.vertexApi),
     infra: groupByServiceAndSku(buckets.infra),
     uncategorized: groupByServiceAndSku(buckets.uncategorized),
   };
 
-  const gemini = round2(items.gemini.reduce((sum, s) => sum + s.cost, 0));
+  const licenses = round2(items.licenses.reduce((sum, s) => sum + s.cost, 0));
+  const vertexApi = round2(items.vertexApi.reduce((sum, s) => sum + s.cost, 0));
   const infra = round2(items.infra.reduce((sum, s) => sum + s.cost, 0));
   const uncategorized = round2(items.uncategorized.reduce((sum, s) => sum + s.cost, 0));
 
   return {
-    gemini,
+    licenses,
+    vertexApi,
     infra,
     uncategorized,
-    total: round2(gemini + infra + uncategorized),
+    total: round2(licenses + vertexApi + infra + uncategorized),
     currency: currency || 'BRL',
     items,
   };
 }
 
-// Custo Gemini por projeto, cross-project (ver ADR 0010): mesmas duas SKUs de
-// GEMINI_SERVICES, mas sem filtro de project.id — cobre a Billing Account
-// inteira, ao contrário de queryCostByService/categorizeCosts, que continuam
-// escopados a homeProjectId. Linhas com project.id nulo (assinaturas
+// Custo (Licenças ou API) por projeto, cross-project (ver ADR 0010): mesmo
+// critério de VERTEX_SERVICES, mas sem filtro de project.id — cobre a Billing
+// Account inteira, ao contrário de queryCostByService/categorizeCosts, que
+// continuam escopados a homeProjectId. Linhas com project.id nulo (assinaturas
 // faturadas no nível da Billing Account, ver ADR 0008) somam ao bucket de
 // homeProjectId — mesmo critério que a query escopada já usa hoje, não um
-// bucket à parte.
-function groupGeminiByProject(rows, homeProjectId) {
+// bucket à parte. Função genérica: usada separadamente para Licenças e para
+// API (ver ADR 0011), cada chamada já recebendo só as linhas do seu Serviço.
+function groupCostByProject(rows, homeProjectId) {
   const rowsByProject = new Map();
   rows.forEach((row) => {
     const key = row.projectId || homeProjectId;
@@ -159,7 +176,7 @@ async function queryCostByService() {
         -- project.id nulo, em vez de atreladas a um projeto específico — diferente do
         -- consumo normal (ex: "Agentspace Enterprise Plus"), que tem project.id
         -- preenchido. Sem esta cláusula extra, essas assinaturas somem silenciosamente
-        -- da categoria Gemini (ver CONTEXT.md, "Custo Gemini").
+        -- da categoria Licenças (ver CONTEXT.md, "Custo de Licenças").
         OR (project.id IS NULL AND service.description IN UNNEST(@geminiServices))
       )
       AND usage_start_time >= TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
@@ -177,7 +194,7 @@ async function queryCostByService() {
         {
           name: 'geminiServices',
           parameterType: { type: 'ARRAY', arrayType: { type: 'STRING' } },
-          parameterValue: { arrayValues: GEMINI_SERVICES.map((v) => ({ value: v })) },
+          parameterValue: { arrayValues: VERTEX_SERVICES.map((v) => ({ value: v })) },
         },
       ],
     },
@@ -186,7 +203,10 @@ async function queryCostByService() {
   return parseRows(res.data);
 }
 
-async function queryGeminiCostByProject() {
+// Uma única query cross-project pras duas SKUs Vertex (Licenças + API) — ver
+// ADR 0011: os dois cards têm seletor de projeto independente, mas os dados
+// vêm da mesma query, divididos em memória por Serviço em getBillingSummary.
+async function queryVertexCostByProject() {
   const projectId = process.env.GCP_PROJECT_ID;
   const table = process.env.BILLING_EXPORT_TABLE;
 
@@ -213,7 +233,7 @@ async function queryGeminiCostByProject() {
         {
           name: 'geminiServices',
           parameterType: { type: 'ARRAY', arrayType: { type: 'STRING' } },
-          parameterValue: { arrayValues: GEMINI_SERVICES.map((v) => ({ value: v })) },
+          parameterValue: { arrayValues: VERTEX_SERVICES.map((v) => ({ value: v })) },
         },
       ],
     },
@@ -228,11 +248,19 @@ async function getBillingSummary() {
 
   if (cache.inflight) return cache.inflight;
 
-  const inflight = Promise.all([queryCostByService(), queryGeminiCostByProject()])
-    .then(([rows, geminiProjectRows]) => {
+  const inflight = Promise.all([queryCostByService(), queryVertexCostByProject()])
+    .then(([rows, vertexProjectRows]) => {
+      const homeProjectId = process.env.GCP_PROJECT_ID;
       const summary = {
         ...categorizeCosts(rows),
-        geminiByProject: groupGeminiByProject(geminiProjectRows, process.env.GCP_PROJECT_ID),
+        licensesByProject: groupCostByProject(
+          vertexProjectRows.filter((r) => LICENSE_SERVICES.includes(r.service)),
+          homeProjectId,
+        ),
+        apiByProject: groupCostByProject(
+          vertexProjectRows.filter((r) => API_SERVICES.includes(r.service)),
+          homeProjectId,
+        ),
         updatedAt: new Date().toISOString(),
       };
       cache = { data: summary, fetchedAt: Date.now(), inflight: null };
@@ -248,5 +276,10 @@ async function getBillingSummary() {
 }
 
 module.exports = {
-  categorizeCosts, groupGeminiByProject, getBillingSummary, GEMINI_SERVICES, INFRA_SERVICES,
+  categorizeCosts,
+  groupCostByProject,
+  getBillingSummary,
+  LICENSE_SERVICES,
+  API_SERVICES,
+  INFRA_SERVICES,
 };

@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Typography, Space, Button, Spin, Empty, Select,
+  Typography, Space, Button, Spin, Empty,
 } from 'antd';
 import {
-  WalletOutlined, RobotOutlined, CloudServerOutlined, QuestionCircleOutlined, ReloadOutlined,
+  WalletOutlined, SafetyCertificateOutlined, ApiOutlined, CloudServerOutlined, QuestionCircleOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import BillingCategoryCard from '../components/BillingCategoryCard';
 import { formatCurrency } from '../utils/billingFormatting';
@@ -16,9 +16,10 @@ function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-// Agrega os items (por Serviço/SKU) de todos os projetos do geminiByProject
-// num único drill-down, pra vista "Todos os projetos" do card Gemini.
-function mergeGeminiItems(byProject) {
+// Agrega os items (por Serviço/SKU) de todos os projetos de um *ByProject
+// (licensesByProject ou apiByProject) num único drill-down, pra vista "Todos
+// os projetos" de cada card.
+function mergeCostItems(byProject) {
   const byService = new Map();
   Object.values(byProject).forEach(({ items }) => {
     items.forEach(({ service, cost, skus }) => {
@@ -42,26 +43,36 @@ function mergeGeminiItems(byProject) {
     .sort((a, b) => b.cost - a.cost);
 }
 
+// Estado + derivação do card "por projeto" (Licenças ou API) — os dois cards
+// têm seletor de projeto independente um do outro (ver ADR 0011), mas a
+// mesma lógica de "Todos os projetos" vs. projeto específico.
+function useProjectScopedCost(byProject) {
+  const [project, setProject] = useState(ALL_PROJECTS);
+
+  const options = useMemo(() => [
+    { value: ALL_PROJECTS, label: 'Todos os projetos' },
+    ...Object.entries(byProject?.byProject ?? {}).map(([key, p]) => ({ value: key, label: p.label })),
+  ], [byProject]);
+
+  const value = project === ALL_PROJECTS
+    ? byProject?.total
+    : byProject?.byProject[project]?.total;
+
+  const items = project === ALL_PROJECTS
+    ? mergeCostItems(byProject?.byProject ?? {})
+    : byProject?.byProject[project]?.items ?? [];
+
+  return {
+    project, setProject, options, value, items,
+  };
+}
+
 export default function BillingPage({
   summary, loading, lastUpdated, reload,
 }) {
   const currency = summary?.currency || 'BRL';
-  const [geminiProject, setGeminiProject] = useState(ALL_PROJECTS);
-
-  const geminiByProject = summary?.geminiByProject;
-
-  const geminiProjectOptions = useMemo(() => [
-    { value: ALL_PROJECTS, label: 'Todos os projetos' },
-    ...Object.entries(geminiByProject?.byProject ?? {}).map(([key, p]) => ({ value: key, label: p.label })),
-  ], [geminiByProject]);
-
-  const geminiValue = geminiProject === ALL_PROJECTS
-    ? geminiByProject?.total
-    : geminiByProject?.byProject[geminiProject]?.total;
-
-  const geminiItems = geminiProject === ALL_PROJECTS
-    ? mergeGeminiItems(geminiByProject?.byProject ?? {})
-    : geminiByProject?.byProject[geminiProject]?.items ?? [];
+  const licenses = useProjectScopedCost(summary?.licensesByProject);
+  const api = useProjectScopedCost(summary?.apiByProject);
 
   return (
     <div style={{ padding: 24 }}>
@@ -102,26 +113,28 @@ export default function BillingPage({
                 value={formatCurrency(summary.total, currency)}
                 hint="Mês corrente"
               />
-              <div>
-                <Select
-                  size="small"
-                  virtual={false}
-                  value={geminiProject}
-                  onChange={setGeminiProject}
-                  options={geminiProjectOptions}
-                  style={{ width: '100%', marginBottom: 8 }}
-                />
-                <BillingCategoryCard
-                  icon={<RobotOutlined />}
-                  iconBg="#f5f3ff"
-                  iconColor="#7c3aed"
-                  label="Gemini"
-                  value={formatCurrency(geminiValue, currency)}
-                  hint="Vertex AI Search / licenças"
-                  currency={currency}
-                  items={geminiItems}
-                />
-              </div>
+              <BillingCategoryCard
+                icon={<SafetyCertificateOutlined />}
+                iconBg="#f5f3ff"
+                iconColor="#7c3aed"
+                label="Licenças"
+                value={formatCurrency(licenses.value, currency)}
+                hint="Assinaturas Gemini Enterprise / Agentspace"
+                currency={currency}
+                items={licenses.items}
+                filter={{ value: licenses.project, onChange: licenses.setProject, options: licenses.options }}
+              />
+              <BillingCategoryCard
+                icon={<ApiOutlined />}
+                iconBg="#e6f4ff"
+                iconColor="#1677ff"
+                label="API"
+                value={formatCurrency(api.value, currency)}
+                hint="Consumo de modelo (LLM)"
+                currency={currency}
+                items={api.items}
+                filter={{ value: api.project, onChange: api.setProject, options: api.options }}
+              />
               <BillingCategoryCard
                 icon={<CloudServerOutlined />}
                 iconBg="#eef2ff"
