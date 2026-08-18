@@ -66,7 +66,25 @@ body {
 }
 
 .stat-card {
+  overflow: hidden;
   transition: box-shadow 200ms ease, border-color 200ms ease;
+}
+
+/* O item selecionado do Select (modo single) não trunca por padrão no antd
+   (só o modo "multiple" define text-overflow/ellipsis) e, dentro do flex
+   interno do componente, não encolhe abaixo do seu conteúdo — isso faz o
+   texto vazar por cima do rótulo do card quando o dropdown é mais estreito
+   que o valor selecionado. Forçamos min-width:0 pra permitir encolher e
+   ellipsis pra truncar em vez de sobrepor. */
+.billing-filter-select .ant-select-selector {
+  min-width: 0;
+}
+
+.billing-filter-select .ant-select-selection-item {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stat-card:hover {
