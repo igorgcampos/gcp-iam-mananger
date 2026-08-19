@@ -13,8 +13,16 @@ const { bigquery } = require('./gcpClients');
 // ficar cada vez mais relevante. Continuam sendo tratadas juntas sempre que o
 // motivo for técnico e não de domínio (ex: a exceção de project.id nulo do
 // ADR 0008, ou a query cross-project do ADR 0010).
+//
+// API_SERVICES tem dois Serviços GCP distintos — "Vertex AI" (a API
+// enterprise, usada pelo Agentspace) e "Gemini API" (a API "direta" do
+// Gemini, tipo AI Studio, tipicamente usada em projetos de POC) — porque a
+// ADR 0013 decidiu que os dois representam o mesmo conceito de domínio
+// (consumo de modelo/LLM), mesmo sendo produtos GCP diferentes. O nome
+// VERTEX_SERVICES continua usado nas queries/campos por conveniência
+// (ver ADR 0013), mesmo incluindo um Serviço que não é Vertex.
 const LICENSE_SERVICES = ['Vertex AI Search'];
-const API_SERVICES = ['Vertex AI'];
+const API_SERVICES = ['Vertex AI', 'Gemini API'];
 const VERTEX_SERVICES = [...LICENSE_SERVICES, ...API_SERVICES];
 
 // INFRA_SERVICES é a infraestrutura "clássica" de nuvem (compute, storage,

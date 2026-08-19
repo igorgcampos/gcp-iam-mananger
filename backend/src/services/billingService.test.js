@@ -172,6 +172,25 @@ describe('getBillingSummary', () => {
     expect(summary.apiByProject.byProject['agentspace-469418']).toBeUndefined();
   });
 
+  test('"Gemini API" de um projeto fora de agentspace-469418 aparece em apiByProject, cross-project (ADR 0013)', async () => {
+    queryMock.mockImplementation((args) => {
+      if (hasProjectIdParam(args)) return Promise.resolve(mockQueryResult([]));
+      return Promise.resolve(mockProjectQueryResult([
+        {
+          projectId: 'teste-api-gemini-474417', service: 'Gemini API', sku: 'Generate content output token count gemini 3.5 flash lite text', cost: 20.19, currency: 'BRL',
+        },
+      ]));
+    });
+
+    const summary = await getBillingSummary();
+
+    expect(summary.apiByProject.byProject['teste-api-gemini-474417']).toEqual({
+      label: 'teste-api-gemini-474417',
+      total: 20.19,
+      items: [{ service: 'Gemini API', cost: 20.19, skus: [{ sku: 'Generate content output token count gemini 3.5 flash lite text', cost: 20.19 }] }],
+    });
+  });
+
   test('linhas sem project.id na query cross-project somam ao bucket do agentspace-469418 (projeto desta app)', async () => {
     queryMock.mockImplementation((args) => {
       if (hasProjectIdParam(args)) return Promise.resolve(mockQueryResult([]));
@@ -359,6 +378,13 @@ describe('categorizeCosts', () => {
   test('categoriza "Vertex AI" (sem "Search") como Custo de API, separado de Licenças', () => {
     const result = categorizeCosts([{ service: 'Vertex AI', sku: 'Vertex AI Online Prediction', cost: 40.73, currency: 'BRL' }]);
     expect(result.vertexApi).toBe(40.73);
+    expect(result.licenses).toBe(0);
+    expect(result.uncategorized).toBe(0);
+  });
+
+  test('categoriza "Gemini API" como Custo de API, mesmo sendo um produto GCP diferente de Vertex AI (ADR 0013)', () => {
+    const result = categorizeCosts([{ service: 'Gemini API', sku: 'Generate content output token count gemini 3.5 flash lite text', cost: 20.19, currency: 'BRL' }]);
+    expect(result.vertexApi).toBe(20.19);
     expect(result.licenses).toBe(0);
     expect(result.uncategorized).toBe(0);
   });
