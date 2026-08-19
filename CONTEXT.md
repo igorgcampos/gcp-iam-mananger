@@ -96,3 +96,19 @@ _Avoid_: usar "SKU" para o que na verdade é Serviço (confusão histórica dest
 **Billing Export (Standard usage cost)**:
 Mecanismo do GCP, já habilitado na Billing Account "Projetos Editora Globo", que grava diariamente o custo por SKU de todos os projetos da Billing Account (71 no momento desta decisão) numa tabela do BigQuery: `infra-bi-355620.billing_standard.gcp_billing_export_v1_01779C_55AF20_FD92F6` — o sufixo do nome da tabela é o ID da Billing Account, não de um projeto. É a fonte de dados de toda a página de Billing; consultada diretamente (schema padrão do Google), sem depender das tabelas/views internas de FinOps (`tbCusto*`, `vwResultadoMes*`) que outro time mantém no mesmo dataset. Distinto de **Detailed usage cost** (outro tipo de export, desabilitado, que adicionaria granularidade por recurso individual — não usado por esta feature).
 _Avoid_: Billing export genérico (especificar sempre "Standard usage cost" quando a distinção importar), export de faturamento
+
+**Alerta de Custo** (ver [ADR 0012](docs/adr/0012-alerta-de-aumento-de-custo-por-sku.md)):
+Aviso exibido na página de Custos quando uma SKU foge do padrão recente de gasto, calculado sobre as quatro subcategorias do Custo do Projeto (Licenças, API, Infra, Outros Serviços) e sempre atribuído a um projeto específico — nunca ao agregado "Todos os projetos" das visões cross-project de Licenças/API. Tem dois subtipos, **Alerta de Aumento do SKU** e **Novo SKU no Billing**; a lista completa vive em `summary.alerts`, recalculada junto do resto do resumo (mesmo cache de 4h do backend) — não existe estado de "visto"/"dispensado", o alerta sempre reflete a situação atual.
+_Avoid_: Spike, notificação de custo
+
+**Dia de Referência do Alerta**:
+O dia tratado como "hoje" para fins de Alerta de Custo — sempre o dia anterior ao momento da consulta, nunca o dia corrente em andamento, porque o Billing Export só atualiza 1x/dia e o dia corrente estaria com dados incompletos.
+_Avoid_: Hoje (ambíguo nesse contexto — em Alerta de Custo, nunca é o dia corrente)
+
+**Alerta de Aumento do SKU**:
+Subtipo de Alerta de Custo: dispara quando o custo de uma SKU já existente, no Dia de Referência do Alerta e em um projeto específico, supera ao mesmo tempo dois limiares em relação à média móvel dos 7 dias anteriores (exige um mínimo de 3 dias de histórico pra ser avaliado): +R$300 em valor absoluto E +50% em termos percentuais. Os dois critérios valem juntos — só percentual gera ruído em SKUs pequenas, só absoluto ignora crescimento proporcional relevante em SKUs caras.
+_Avoid_: Spike de SKU, pico de custo
+
+**Novo SKU no Billing**:
+Subtipo de Alerta de Custo: dispara quando uma SKU tem custo maior que zero no Dia de Referência do Alerta, mas nenhum custo em nenhum dos 7 dias anteriores, no mesmo projeto — tratado à parte do Alerta de Aumento do SKU porque não há média válida pra comparar (divisão por zero), e porque semanticamente é uma cobrança nova, não um aumento.
+_Avoid_: SKU nova sozinho sem contexto (ambíguo com "SKU nova esse mês")

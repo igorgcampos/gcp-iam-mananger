@@ -80,4 +80,59 @@ describe('BillingCategoryCard', () => {
 
     expect(screen.getByText('Vertex AI Search')).toBeInTheDocument();
   });
+
+  describe('Alerta de Custo (badge inline — ver CONTEXT.md e ADR 0012)', () => {
+    it('não mostra badge quando a SKU não tem alerta', async () => {
+      const user = userEvent.setup();
+      render(
+        <BillingCategoryCard label="Gemini" value={180} currency="BRL" items={geminiItems} alerts={[]} />,
+      );
+      await user.click(screen.getByText('Gemini'));
+
+      expect(screen.queryByTestId('sku-alert-badge')).not.toBeInTheDocument();
+    });
+
+    it('mostra badge de "aumento" na SKU correspondente ao alerta', async () => {
+      const user = userEvent.setup();
+      const alerts = [{
+        tipo: 'aumento_sku', category: 'licenses', projectId: 'agentspace-469418', service: 'Vertex AI Search', sku: 'Query API', cost: 500, baseline: 100, deltaAbsolute: 400, deltaPercent: 400, currency: 'BRL',
+      }];
+      render(
+        <BillingCategoryCard label="Gemini" value={180} currency="BRL" items={geminiItems} alerts={alerts} />,
+      );
+      await user.click(screen.getByText('Gemini'));
+
+      const badge = screen.getByTestId('sku-alert-badge');
+      expect(badge).toBeInTheDocument();
+      expect(badge.title).toContain('Query API');
+      expect(badge.title).toContain('agentspace-469418');
+    });
+
+    it('mostra badge de "novo sku" com ícone diferente do de "aumento"', async () => {
+      const user = userEvent.setup();
+      const alerts = [{
+        tipo: 'novo_sku', category: 'licenses', projectId: 'agentspace-469418', service: 'Vertex AI Search', sku: 'Storage', cost: 50, currency: 'BRL',
+      }];
+      render(
+        <BillingCategoryCard label="Gemini" value={180} currency="BRL" items={geminiItems} alerts={alerts} />,
+      );
+      await user.click(screen.getByText('Gemini'));
+
+      expect(screen.getByTestId('sku-alert-badge').title).toContain('Novo SKU no Billing');
+    });
+
+    it('não confunde SKUs com o mesmo nome em Serviços diferentes', async () => {
+      const user = userEvent.setup();
+      const alerts = [{
+        tipo: 'aumento_sku', category: 'licenses', projectId: 'agentspace-469418', service: 'Vertex AI', sku: 'Online Prediction', cost: 500, baseline: 100, deltaAbsolute: 400, deltaPercent: 400, currency: 'BRL',
+      }];
+      render(
+        <BillingCategoryCard label="Gemini" value={180} currency="BRL" items={geminiItems} alerts={alerts} />,
+      );
+      await user.click(screen.getByText('Gemini'));
+
+      // Só existe 1 badge — o alerta é do Serviço "Vertex AI", não "Vertex AI Search"
+      expect(screen.getAllByTestId('sku-alert-badge')).toHaveLength(1);
+    });
+  });
 });

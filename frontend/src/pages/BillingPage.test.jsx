@@ -172,3 +172,47 @@ describe('BillingPage — os dois seletores de projeto são independentes', () =
     expect(within(apiSelect.closest('.ant-select')).getByText('Todos os projetos')).toBeInTheDocument();
   });
 });
+
+describe('BillingPage — banner de Alerta de Custo (ver CONTEXT.md e ADR 0012)', () => {
+  it('não mostra banner quando summary.alerts está vazio ou ausente', () => {
+    render(<BillingPage summary={summary} loading={false} reload={() => {}} />);
+    expect(screen.queryByText(/Alerta de Custo/)).not.toBeInTheDocument();
+  });
+
+  it('mostra o banner com uma linha por alerta, no topo da página', () => {
+    const summaryWithAlerts = {
+      ...summary,
+      alerts: [
+        {
+          tipo: 'aumento_sku', category: 'licenses', projectId: 'agentspace-469418', service: 'Vertex AI Search', sku: 'Gemini Enterprise: Data Index', cost: 1886.70, baseline: 300, deltaAbsolute: 1586.70, deltaPercent: 528.9, currency: 'BRL',
+        },
+        {
+          tipo: 'novo_sku', category: 'infra', projectId: 'agentspace-469418', service: 'Cloud Run', sku: 'CPU Allocation Time', cost: 50, currency: 'BRL',
+        },
+      ],
+    };
+    render(<BillingPage summary={summaryWithAlerts} loading={false} reload={() => {}} />);
+
+    expect(screen.getByText('2 Alertas de Custo')).toBeInTheDocument();
+    expect(screen.getByText(/Gemini Enterprise: Data Index/)).toBeInTheDocument();
+    expect(screen.getByText(/Novo SKU no Billing.*CPU Allocation Time/)).toBeInTheDocument();
+  });
+
+  it('cada card recebe só os alertas da sua própria categoria', async () => {
+    const user = userEvent.setup();
+    const summaryWithAlerts = {
+      ...summary,
+      alerts: [{
+        tipo: 'aumento_sku', category: 'infra', projectId: 'agentspace-469418', service: 'Cloud Run', sku: 'CPU Allocation Time', cost: 500, baseline: 100, deltaAbsolute: 400, deltaPercent: 400, currency: 'BRL',
+      }],
+    };
+    render(<BillingPage summary={summaryWithAlerts} loading={false} reload={() => {}} />);
+
+    // Expande Licenças (não deve ter badge) e Infra (deve ter)
+    await user.click(screen.getByText('Licenças'));
+    expect(screen.queryByTestId('sku-alert-badge')).not.toBeInTheDocument();
+
+    await user.click(screen.getByText('Infra'));
+    expect(screen.getByTestId('sku-alert-badge')).toBeInTheDocument();
+  });
+});

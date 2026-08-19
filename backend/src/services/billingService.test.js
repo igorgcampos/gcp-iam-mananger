@@ -1,5 +1,5 @@
 const {
-  categorizeCosts, groupCostByProject, LICENSE_SERVICES, API_SERVICES,
+  categorizeCosts, groupCostByProject, computeCostAlerts, getAlertReferenceDate, LICENSE_SERVICES, API_SERVICES,
 } = require('./billingService');
 
 const OLD_ENV = process.env;
@@ -9,14 +9,17 @@ jest.mock('./gcpClients', () => ({
   bigquery: { jobs: { query: jest.fn() } },
 }));
 
+// `date` é opcional nos dois helpers (default null) — só os testes de Alerta
+// de Custo precisam preenchê-lo; os demais continuam funcionando como antes,
+// já que uma row sem `date` é simplesmente ignorada por computeCostAlerts.
 function mockQueryResult(rows) {
   return {
     data: {
-      schema: { fields: [{ name: 'service' }, { name: 'sku' }, { name: 'cost' }, { name: 'currency' }] },
+      schema: { fields: [{ name: 'service' }, { name: 'sku' }, { name: 'date' }, { name: 'cost' }, { name: 'currency' }] },
       rows: rows.map(({
-        service, sku, cost, currency,
+        service, sku, date, cost, currency,
       }) => ({
-        f: [{ v: service }, { v: sku }, { v: String(cost) }, { v: currency }],
+        f: [{ v: service }, { v: sku }, { v: date ?? null }, { v: String(cost) }, { v: currency }],
       })),
     },
   };
@@ -25,11 +28,11 @@ function mockQueryResult(rows) {
 function mockProjectQueryResult(rows) {
   return {
     data: {
-      schema: { fields: [{ name: 'projectId' }, { name: 'service' }, { name: 'sku' }, { name: 'cost' }, { name: 'currency' }] },
+      schema: { fields: [{ name: 'projectId' }, { name: 'service' }, { name: 'sku' }, { name: 'date' }, { name: 'cost' }, { name: 'currency' }] },
       rows: rows.map(({
-        projectId, service, sku, cost, currency,
+        projectId, service, sku, date, cost, currency,
       }) => ({
-        f: [{ v: projectId }, { v: service }, { v: sku }, { v: String(cost) }, { v: currency }],
+        f: [{ v: projectId }, { v: service }, { v: sku }, { v: date ?? null }, { v: String(cost) }, { v: currency }],
       })),
     },
   };
@@ -200,6 +203,50 @@ describe('getBillingSummary', () => {
       },
     ]);
   });
+
+  test('monta summary.alerts a partir das duas queries, sem contar Licenças/API de agentspace-469418 duas vezes (ADR 0012)', async () => {
+    jest.setSystemTime(new Date('2026-08-19T12:00:00Z')); // Dia de Referência do Alerta = 2026-08-18
+    queryMock.mockImplementation((args) => {
+      if (hasProjectIdParam(args)) {
+        // queryCostByService: escopada a agentspace-469418, inclui Licenças
+        // (Vertex AI Search) — não deve ser somada de novo em alertRows.
+        return Promise.resolve(mockQueryResult([
+          {
+            service: 'Vertex AI Search', sku: 'Gemini Enterprise: Data Index', date: '2026-08-18', cost: 1886.70, currency: 'BRL',
+          },
+          {
+            service: 'Cloud Run', sku: 'CPU Allocation Time', date: '2026-08-11', cost: 50, currency: 'BRL',
+          },
+          {
+            service: 'Cloud Run', sku: 'CPU Allocation Time', date: '2026-08-12', cost: 50, currency: 'BRL',
+          },
+          {
+            service: 'Cloud Run', sku: 'CPU Allocation Time', date: '2026-08-13', cost: 50, currency: 'BRL',
+          },
+          {
+            service: 'Cloud Run', sku: 'CPU Allocation Time', date: '2026-08-18', cost: 900, currency: 'BRL',
+          },
+        ]));
+      }
+      return Promise.resolve(mockProjectQueryResult([
+        {
+          projectId: 'agentspace-469418', service: 'Vertex AI Search', sku: 'Gemini Enterprise: Data Index', date: '2026-08-18', cost: 1886.70, currency: 'BRL',
+        },
+      ]));
+    });
+
+    const summary = await getBillingSummary();
+
+    expect(summary.alerts).toHaveLength(2);
+    const [top] = summary.alerts;
+    expect(top).toMatchObject({
+      tipo: 'novo_sku', projectId: 'agentspace-469418', category: 'licenses', sku: 'Gemini Enterprise: Data Index', cost: 1886.70,
+    });
+    const cloudRunAlert = summary.alerts.find((a) => a.sku === 'CPU Allocation Time');
+    expect(cloudRunAlert).toMatchObject({
+      tipo: 'aumento_sku', projectId: 'agentspace-469418', category: 'infra', cost: 900, baseline: 50,
+    });
+  });
 });
 
 describe('groupCostByProject', () => {
@@ -364,5 +411,130 @@ describe('categorizeCosts', () => {
     const { items } = categorizeCosts(rows);
 
     expect(items.infra).toEqual([{ service: 'Cloud Run', cost: 7.5, skus: [{ sku: 'Requests', cost: 7.5 }] }]);
+  });
+});
+
+describe('getAlertReferenceDate', () => {
+  test('devolve o dia anterior ao "now" passado, sempre em UTC (Dia de Referência do Alerta — ver CONTEXT.md)', () => {
+    expect(getAlertReferenceDate(new Date('2026-08-19T12:00:00Z'))).toBe('2026-08-18');
+  });
+
+  test('vira o mês corretamente', () => {
+    expect(getAlertReferenceDate(new Date('2026-09-01T00:00:01Z'))).toBe('2026-08-31');
+  });
+
+  test('nunca é o dia corrente, mesmo perto da virada (23:59 UTC)', () => {
+    expect(getAlertReferenceDate(new Date('2026-08-19T23:59:00Z'))).toBe('2026-08-18');
+  });
+});
+
+describe('computeCostAlerts', () => {
+  const REF = '2026-08-18'; // Dia de Referência do Alerta
+
+  function row(overrides) {
+    return {
+      projectId: 'agentspace-469418', service: 'Vertex AI', sku: 'Online Prediction', date: REF, cost: 0, currency: 'BRL', ...overrides,
+    };
+  }
+
+  // 7 dias de baseline "normais" antes de REF (2026-08-11 a 2026-08-17)
+  function baselineRows(cost, overrides = {}) {
+    const dates = ['2026-08-11', '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15', '2026-08-16', '2026-08-17'];
+    return dates.map((date) => row({ date, cost, ...overrides }));
+  }
+
+  test('dispara "aumento_sku" quando o custo do Dia de Referência passa R$300 E 50% da média dos 7 dias anteriores', () => {
+    const rows = [...baselineRows(100), row({ cost: 500 })]; // +R$400 (>300) e +400% (>50%)
+
+    const alerts = computeCostAlerts(rows, REF);
+
+    expect(alerts).toEqual([{
+      tipo: 'aumento_sku',
+      category: 'vertexApi',
+      projectId: 'agentspace-469418',
+      service: 'Vertex AI',
+      sku: 'Online Prediction',
+      date: REF,
+      cost: 500,
+      baseline: 100,
+      deltaAbsolute: 400,
+      deltaPercent: 400,
+      currency: 'BRL',
+    }]);
+  });
+
+  test('não dispara quando só o limiar percentual passa, mas o absoluto não (R$2 → R$8, 300%)', () => {
+    const rows = [...baselineRows(2), row({ cost: 8 })];
+    expect(computeCostAlerts(rows, REF)).toEqual([]);
+  });
+
+  test('não dispara quando só o limiar absoluto passa, mas o percentual não (R$5.000 → R$5.400, +8%)', () => {
+    const rows = [...baselineRows(5000), row({ cost: 5400 })];
+    expect(computeCostAlerts(rows, REF)).toEqual([]);
+  });
+
+  test('dispara "novo_sku" quando não há nenhum custo nos 7 dias anteriores', () => {
+    const rows = [row({ cost: 50 })]; // só o Dia de Referência, sem baseline nenhuma
+
+    const alerts = computeCostAlerts(rows, REF);
+
+    expect(alerts).toEqual([{
+      tipo: 'novo_sku',
+      category: 'vertexApi',
+      projectId: 'agentspace-469418',
+      service: 'Vertex AI',
+      sku: 'Online Prediction',
+      date: REF,
+      cost: 50,
+      currency: 'BRL',
+    }]);
+  });
+
+  test('não avalia (nem aumento, nem novo) quando há histórico mas abaixo do mínimo de 3 dias', () => {
+    const rows = [
+      row({ date: '2026-08-17', cost: 10 }),
+      row({ date: '2026-08-16', cost: 10 }),
+      row({ cost: 500 }), // só 2 dias de baseline — abaixo de ALERT_MIN_BASELINE_DAYS
+    ];
+    expect(computeCostAlerts(rows, REF)).toEqual([]);
+  });
+
+  test('ignora a SKU quando não há custo nenhum no Dia de Referência', () => {
+    const rows = baselineRows(100); // sem nenhuma row em REF
+    expect(computeCostAlerts(rows, REF)).toEqual([]);
+  });
+
+  test('ignora rows fora da janela de 8 dias (ex: mês inteiro trazido pela query alargada)', () => {
+    const rows = [...baselineRows(100), row({ cost: 500 }), row({ date: '2026-08-01', cost: 999999 })];
+    const alerts = computeCostAlerts(rows, REF);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].baseline).toBe(100); // a row de 08-01 não entrou na média
+  });
+
+  test('trata projetos diferentes como grupos separados, mesmo Serviço/SKU (Licenças/API cross-project — ADR 0012)', () => {
+    const rows = [
+      ...baselineRows(100, { projectId: 'projeto-a' }),
+      row({ projectId: 'projeto-a', cost: 500 }),
+      ...baselineRows(20, { projectId: 'projeto-b' }),
+      row({ projectId: 'projeto-b', cost: 25 }), // não dispara (abaixo dos limiares)
+    ];
+
+    const alerts = computeCostAlerts(rows, REF);
+
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].projectId).toBe('projeto-a');
+  });
+
+  test('ordena por custo decrescente', () => {
+    const rows = [
+      ...baselineRows(100, { sku: 'A' }), row({ sku: 'A', cost: 1000 }),
+      ...baselineRows(100, { sku: 'B' }), row({ sku: 'B', cost: 2000 }),
+    ];
+    const alerts = computeCostAlerts(rows, REF);
+    expect(alerts.map((a) => a.sku)).toEqual(['B', 'A']);
+  });
+
+  test('lista vazia não gera alertas', () => {
+    expect(computeCostAlerts([], REF)).toEqual([]);
   });
 });

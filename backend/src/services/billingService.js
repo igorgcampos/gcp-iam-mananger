@@ -44,8 +44,26 @@ const INFRA_SERVICES = [
   'BigQuery',
 ];
 
+// Limiares do Alerta de Custo (ver CONTEXT.md e ADR 0012) — constantes por
+// enquanto, não configuráveis por usuário, no mesmo espírito de
+// LICENSE_SERVICES/API_SERVICES/INFRA_SERVICES acima.
+const ALERT_BASELINE_WINDOW_DAYS = 7;
+const ALERT_MIN_BASELINE_DAYS = 3;
+const ALERT_ABSOLUTE_THRESHOLD = 300; // R$
+const ALERT_PERCENT_THRESHOLD = 0.5; // 50%
+
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+// Extraído de categorizeCosts pra ser reaproveitado por computeCostAlerts —
+// mesmo critério de categorização (Custo de Licenças/API/Infra/Outros
+// Serviços), num só lugar.
+function categoryForService(service) {
+  if (LICENSE_SERVICES.includes(service)) return 'licenses';
+  if (API_SERVICES.includes(service)) return 'vertexApi';
+  if (INFRA_SERVICES.includes(service)) return 'infra';
+  return 'uncategorized';
 }
 
 function groupByServiceAndSku(rows) {
@@ -75,15 +93,10 @@ function categorizeCosts(rows) {
 
   rows.forEach((row) => {
     currency = currency || row.currency;
-    if (LICENSE_SERVICES.includes(row.service)) {
-      buckets.licenses.push(row);
-    } else if (API_SERVICES.includes(row.service)) {
-      buckets.vertexApi.push(row);
-    } else if (INFRA_SERVICES.includes(row.service)) {
-      buckets.infra.push(row);
-    } else {
-      buckets.uncategorized.push(row);
-    }
+    const category = categoryForService(row.service);
+    // categoryForService devolve 'vertexApi' (chave do resumo); o bucket de
+    // categorização interno usa o mesmo nome.
+    buckets[category].push(row);
   });
 
   const items = {
@@ -152,11 +165,23 @@ function parseRows(data) {
       projectId: obj.projectId ?? null,
       service: obj.service,
       sku: obj.sku ?? 'Outros',
+      date: obj.date ?? null,
       cost: parseFloat(obj.cost) || 0,
       currency: obj.currency,
     };
   });
 }
+
+// Limite inferior do WHERE das duas queries: cobre tanto o mês corrente
+// (pros totais que os cards já mostram) quanto os últimos
+// ALERT_BASELINE_WINDOW_DAYS + 1 dias completos (pro Alerta de Custo) — o
+// menor dos dois, calculado uma vez e reaproveitado pelas duas queries (ver
+// ADR 0012, "Opção B": enriquecer as queries existentes em vez de criar
+// novas). O limite superior continua sem restrição, como já era.
+const ALERT_WINDOW_LOWER_BOUND_SQL = `LEAST(
+      TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH),
+      TIMESTAMP_SUB(TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), DAY), INTERVAL ${ALERT_BASELINE_WINDOW_DAYS + 1} DAY)
+    )`;
 
 async function queryCostByService() {
   const projectId = process.env.GCP_PROJECT_ID;
@@ -166,6 +191,7 @@ async function queryCostByService() {
     SELECT
       service.description AS service,
       IFNULL(sku.description, 'Outros') AS sku,
+      DATE(usage_start_time) AS date,
       SUM(cost) + IFNULL(SUM((SELECT SUM(c.amount) FROM UNNEST(credits) AS c)), 0) AS cost,
       ANY_VALUE(currency) AS currency
     FROM \`${table}\`
@@ -179,8 +205,8 @@ async function queryCostByService() {
         -- da categoria Licenças (ver CONTEXT.md, "Custo de Licenças").
         OR (project.id IS NULL AND service.description IN UNNEST(@geminiServices))
       )
-      AND usage_start_time >= TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
-    GROUP BY service, sku
+      AND usage_start_time >= ${ALERT_WINDOW_LOWER_BOUND_SQL}
+    GROUP BY service, sku, date
   `;
 
   const res = await bigquery.jobs.query({
@@ -215,12 +241,13 @@ async function queryVertexCostByProject() {
       project.id AS projectId,
       service.description AS service,
       IFNULL(sku.description, 'Outros') AS sku,
+      DATE(usage_start_time) AS date,
       SUM(cost) + IFNULL(SUM((SELECT SUM(c.amount) FROM UNNEST(credits) AS c)), 0) AS cost,
       ANY_VALUE(currency) AS currency
     FROM \`${table}\`
     WHERE service.description IN UNNEST(@geminiServices)
-      AND usage_start_time >= TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
-    GROUP BY projectId, service, sku
+      AND usage_start_time >= ${ALERT_WINDOW_LOWER_BOUND_SQL}
+    GROUP BY projectId, service, sku, date
   `;
 
   const res = await bigquery.jobs.query({
@@ -242,6 +269,104 @@ async function queryVertexCostByProject() {
   return parseRows(res.data);
 }
 
+// "Hoje" pra fins de Alerta de Custo é sempre ontem (nunca o dia corrente em
+// andamento) — o Billing Export só atualiza 1x/dia, então o dia corrente
+// estaria com dados incompletos (ver CONTEXT.md, "Dia de Referência do
+// Alerta"). Calculado em UTC, mesmo fuso que as duas queries já usam
+// (CURRENT_TIMESTAMP() sem TIMEZONE explícito).
+function getAlertReferenceDate(now = new Date()) {
+  const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  day.setUTCDate(day.getUTCDate() - 1);
+  return day.toISOString().slice(0, 10); // 'YYYY-MM-DD', mesmo formato de DATE() no BigQuery
+}
+
+function daysBefore(dateStr, referenceDate) {
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  return Math.round((Date.parse(`${referenceDate}T00:00:00Z`) - Date.parse(`${dateStr}T00:00:00Z`)) / oneDayMs);
+}
+
+// Alerta de Custo (ver CONTEXT.md e ADR 0012): agrupa rows (já com `date` e
+// `projectId` resolvido — sem `null`, ver getBillingSummary) por
+// projeto+serviço+SKU, separa o Dia de Referência do custo dos até
+// ALERT_BASELINE_WINDOW_DAYS dias anteriores, e decide entre Alerta de
+// Aumento do SKU e Novo SKU no Billing. `rows` pode conter dias fora da
+// janela de 8 dias (o WHERE das queries também cobre o mês corrente) — são
+// ignorados aqui, não só "não é o dia de referência".
+function computeCostAlerts(rows, referenceDate) {
+  const groups = new Map();
+
+  rows.forEach((row) => {
+    if (!row.date) return;
+    const daysAgo = daysBefore(row.date, referenceDate);
+    if (daysAgo < 0 || daysAgo > ALERT_BASELINE_WINDOW_DAYS) return;
+
+    const key = [row.projectId, row.service, row.sku].join(' ');
+    if (!groups.has(key)) {
+      groups.set(key, {
+        projectId: row.projectId,
+        service: row.service,
+        sku: row.sku,
+        currency: row.currency,
+        current: 0,
+        hasCurrent: false,
+        baselineSum: 0,
+        baselineDays: 0,
+      });
+    }
+    const g = groups.get(key);
+    if (daysAgo === 0) {
+      g.current += row.cost;
+      g.hasCurrent = true;
+    } else {
+      g.baselineSum += row.cost;
+      g.baselineDays += 1;
+    }
+  });
+
+  const alerts = [];
+  groups.forEach((g) => {
+    if (!g.hasCurrent || g.current <= 0) return; // nada aconteceu no Dia de Referência
+
+    if (g.baselineDays === 0) {
+      alerts.push({
+        tipo: 'novo_sku',
+        category: categoryForService(g.service),
+        projectId: g.projectId,
+        service: g.service,
+        sku: g.sku,
+        date: referenceDate,
+        cost: round2(g.current),
+        currency: g.currency,
+      });
+      return;
+    }
+
+    if (g.baselineDays < ALERT_MIN_BASELINE_DAYS) return; // histórico curto demais pra avaliar
+
+    const baseline = g.baselineSum / g.baselineDays;
+    const deltaAbsolute = g.current - baseline;
+    const deltaPercent = baseline !== 0 ? deltaAbsolute / baseline : Infinity;
+
+    if (deltaAbsolute > ALERT_ABSOLUTE_THRESHOLD && deltaPercent > ALERT_PERCENT_THRESHOLD) {
+      alerts.push({
+        tipo: 'aumento_sku',
+        category: categoryForService(g.service),
+        projectId: g.projectId,
+        service: g.service,
+        sku: g.sku,
+        date: referenceDate,
+        cost: round2(g.current),
+        baseline: round2(baseline),
+        deltaAbsolute: round2(deltaAbsolute),
+        deltaPercent: round2(deltaPercent * 100),
+        currency: g.currency,
+      });
+    }
+  });
+
+  return alerts.sort((a, b) => b.cost - a.cost);
+}
+
 async function getBillingSummary() {
   const isFresh = cache.data && (Date.now() - cache.fetchedAt) < CACHE_TTL_MS;
   if (isFresh) return cache.data;
@@ -251,6 +376,16 @@ async function getBillingSummary() {
   const inflight = Promise.all([queryCostByService(), queryVertexCostByProject()])
     .then(([rows, vertexProjectRows]) => {
       const homeProjectId = process.env.GCP_PROJECT_ID;
+      const referenceDate = getAlertReferenceDate();
+
+      // Alerta de Custo cobre Licenças/API cross-project (ADR 0012) — usa
+      // vertexProjectRows (que já cobre todos os projetos) pra essas duas
+      // categorias, e `rows` só pro que não é Vertex, pra não somar a mesma
+      // linha (agentspace-469418) duas vezes.
+      const nonVertexRows = rows.filter((r) => !VERTEX_SERVICES.includes(r.service));
+      const alertRows = [...nonVertexRows, ...vertexProjectRows]
+        .map((r) => ({ ...r, projectId: r.projectId || homeProjectId }));
+
       const summary = {
         ...categorizeCosts(rows),
         licensesByProject: groupCostByProject(
@@ -261,6 +396,7 @@ async function getBillingSummary() {
           vertexProjectRows.filter((r) => API_SERVICES.includes(r.service)),
           homeProjectId,
         ),
+        alerts: computeCostAlerts(alertRows, referenceDate),
         updatedAt: new Date().toISOString(),
       };
       cache = { data: summary, fetchedAt: Date.now(), inflight: null };
@@ -278,6 +414,8 @@ async function getBillingSummary() {
 module.exports = {
   categorizeCosts,
   groupCostByProject,
+  computeCostAlerts,
+  getAlertReferenceDate,
   getBillingSummary,
   LICENSE_SERVICES,
   API_SERVICES,

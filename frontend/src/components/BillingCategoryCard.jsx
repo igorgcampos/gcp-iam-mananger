@@ -1,14 +1,35 @@
 import React, { useState } from 'react';
 import {
-  Card, Statistic, Typography, Space, Select,
+  Card, Statistic, Typography, Space, Select, Tooltip,
 } from 'antd';
-import { DownOutlined, UpOutlined } from '@ant-design/icons';
-import { formatCurrency } from '../utils/billingFormatting';
+import {
+  DownOutlined, UpOutlined, ArrowUpOutlined, PlusCircleOutlined,
+} from '@ant-design/icons';
+import { formatCurrency, formatAlertMessage } from '../utils/billingFormatting';
 
 const { Text } = Typography;
 
+// Badge inline de Alerta de Custo (Alerta de Aumento do SKU / Novo SKU no
+// Billing — ver CONTEXT.md e ADR 0012) ao lado do nome da SKU. Aparece mesmo
+// na visão mesclada "Todos os projetos" (o match é só por Serviço+SKU, sem
+// considerar projeto) — por isso o tooltip nomeia o(s) projeto(s) explicitamente,
+// já que o valor exibido na linha pode estar somado de vários projetos.
+function SkuAlertBadge({ alerts }) {
+  if (!alerts || alerts.length === 0) return null;
+  const isNovo = alerts.some((a) => a.tipo === 'novo_sku');
+  const title = alerts.map(formatAlertMessage).join('\n');
+  const Icon = isNovo ? PlusCircleOutlined : ArrowUpOutlined;
+  return (
+    <span title={title} data-testid="sku-alert-badge">
+      <Tooltip title={title}>
+        <Icon style={{ color: isNovo ? '#1677ff' : '#d4380d', fontSize: 12 }} />
+      </Tooltip>
+    </span>
+  );
+}
+
 export default function BillingCategoryCard({
-  icon, iconBg, iconColor, label, value, hint, items, currency, filter,
+  icon, iconBg, iconColor, label, value, hint, items, currency, filter, alerts,
 }) {
   const [expanded, setExpanded] = useState(false);
   const expandable = Array.isArray(items);
@@ -113,19 +134,27 @@ export default function BillingCategoryCard({
                     </Text>
                   </div>
                   <Space direction="vertical" size={2} style={{ width: '100%', marginTop: 4, paddingLeft: 12 }}>
-                    {service.skus.map((sku) => (
-                      <div key={sku.sku} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                        <Text type="secondary" style={{ fontSize: 12, flex: '1 1 auto', minWidth: 0 }}>{sku.sku}</Text>
-                        <Text
-                          type="secondary"
-                          style={{
-                            fontSize: 12, flexShrink: 0, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
-                          }}
-                        >
-                          {formatCurrency(sku.cost, currency)}
-                        </Text>
-                      </div>
-                    ))}
+                    {service.skus.map((sku) => {
+                      const skuAlerts = alerts?.filter(
+                        (a) => a.service === service.service && a.sku === sku.sku,
+                      );
+                      return (
+                        <div key={sku.sku} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                          <Space size={4} style={{ flex: '1 1 auto', minWidth: 0 }}>
+                            <Text type="secondary" style={{ fontSize: 12, minWidth: 0 }}>{sku.sku}</Text>
+                            <SkuAlertBadge alerts={skuAlerts} />
+                          </Space>
+                          <Text
+                            type="secondary"
+                            style={{
+                              fontSize: 12, flexShrink: 0, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+                            }}
+                          >
+                            {formatCurrency(sku.cost, currency)}
+                          </Text>
+                        </div>
+                      );
+                    })}
                   </Space>
                 </div>
               ))}
