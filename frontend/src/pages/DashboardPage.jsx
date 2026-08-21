@@ -10,7 +10,7 @@ import {
 import { tierColor } from '../utils/licenseFormatting';
 import { buildInactivityReport } from '../utils/inactivity';
 import {
-  buildConfigStats, sumAssigned, sumRemaining, getExpiringSoonConfigs,
+  buildConfigStats, sumAssigned, sumRemaining, getExpiringSoonConfigs, getVisibleConfigs,
 } from '../utils/dashboardStats';
 
 const { Title, Text } = Typography;
@@ -106,6 +106,11 @@ export default function DashboardPage({
   const totalAssigned = useMemo(() => sumAssigned(configStats), [configStats]);
   const totalRemaining = useMemo(() => sumRemaining(configStats), [configStats]);
   const expiringSoon = useMemo(() => getExpiringSoonConfigs(configStats), [configStats]);
+
+  // Card "Licenças por camada": some das licenças que já passaram da Janela
+  // de Carência de expiração (ver CONTEXT.md). Não afeta totalAssigned/
+  // totalRemaining acima, que continuam somando todas as licenças.
+  const visibleConfigStats = useMemo(() => getVisibleConfigs(configStats), [configStats]);
 
   const hasExpired = expiringSoon.some((c) => c.daysUntilEnd < 0);
 
@@ -307,9 +312,9 @@ export default function DashboardPage({
                 style={{ borderRadius: 16, height: '100%' }}
                 title={<Text strong>Licenças por camada</Text>}
               >
-                {configStats.length > 0 ? (
+                {visibleConfigStats.length > 0 ? (
                   <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                    {configStats.map((c) => (
+                    {visibleConfigStats.map((c) => (
                       <div
                         key={c.name}
                         style={{

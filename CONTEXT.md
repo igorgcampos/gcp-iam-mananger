@@ -8,6 +8,22 @@ Painel web que permite administrar, sem usar o console do GCP diretamente, quem 
 Um tier de assinatura do Gemini Enterprise/Agentspace atribuído a um usuário do Workspace. Hoje existem dois tiers: **Gemini Enterprise Standard** e **Agentspace Enterprise Plus**.
 _Avoid_: Subscription tier, plano
 
+**Renovação Automática** (`autoRenew`):
+Atributo de uma Licença que indica se ela se renova sozinha ao fim do período de assinatura, sem depender de ação do Operador. Uma Licença com Renovação Automática nunca é tratada como expirando/expirada pela UI — nenhum Aviso de Expiração, Janela de Carência ou corte por data se aplica a ela, mesmo que sua data de expiração esteja no passado.
+_Avoid_: Renovação (sem qualificar "automática" — toda Licença tem data de expiração, mas nem toda se renova sozinha)
+
+**Licença Expirada**:
+Uma Licença sem Renovação Automática cuja data de expiração já passou. Continua existindo e suas Atribuições continuam válidas — usuários mantêm acesso e contam nos totais — até serem removidas manualmente; expirar não revoga nada sozinho, só muda o que o Aviso de Expiração decide mostrar.
+_Avoid_: Licença vencida (usar sempre "expirada", consistente com o campo `endDate`/rótulo "Expira em" já usados na UI)
+
+**Janela de Carência** (de expiração):
+O período de 5 dias corridos após a data de expiração de uma Licença Expirada durante o qual ela ainda aparece no Aviso de Expiração; passada a Janela de Carência, a Licença some dessas superfícies — mas não das que listam ou filtram Atribuições existentes (ver Aviso de Expiração).
+_Avoid_: Grace period (usar o termo em português), "tolerância" sozinho sem "janela"
+
+**Aviso de Expiração**:
+O conjunto de superfícies de UI que refletem o estado de expiração de uma Licença: o Alert de expiração e o card "Licenças por camada" no Dashboard, e o resumo por camada e o seletor de nível no formulário de nova Atribuição na tela Gemini Enterprise. Uma Licença Expirada além da Janela de Carência desaparece de todas essas superfícies. Deliberadamente **não inclui** os totais agregados (Licenças atribuídas, Slots livres, badge de total) nem o filtro/linhas da tabela de Atribuições — esses continuam refletindo a Licença Expirada normalmente, porque servem para localizar quem ainda precisa migrar, não para decidir se a Licença deve ser oferecida a novos usuários.
+_Avoid_: Alerta de licença (ambíguo com **Alerta de Custo**, conceito não relacionado, de Billing)
+
 **Atribuição (License Assignment)**:
 O vínculo entre um usuário e uma Licença, criado em uma data (`Atribuída em`) e com um Status próprio. É o registro central sobre o qual se avalia uso e inatividade.
 _Avoid_: User license, binding

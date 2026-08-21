@@ -11,7 +11,7 @@ import {
 } from '@ant-design/icons';
 import { addGeminiUser, removeGeminiUser } from '../api/gemini';
 import { tierColor, stateTag, renderLicenseTag } from '../utils/licenseFormatting';
-import { buildConfigStats, sumAssigned } from '../utils/dashboardStats';
+import { buildConfigStats, sumAssigned, getVisibleConfigs } from '../utils/dashboardStats';
 import { notifyFetchError } from '../utils/apiError';
 import InactivityReportModal from '../components/InactivityReportModal';
 import CopyUsersReportButton from '../components/CopyUsersReportButton';
@@ -45,8 +45,14 @@ export default function GeminiPage({
 
   const totalAssigned = useMemo(() => sumAssigned(configStats), [configStats]);
 
+  // Cards-resumo por camada e Select do modal: somem as licenças que já
+  // passaram da Janela de Carência de expiração (ver CONTEXT.md). A tabela
+  // de usuários e seu filtro de "Licença" continuam usando configStats
+  // completo — servem para localizar quem ainda precisa migrar.
+  const visibleConfigStats = useMemo(() => getVisibleConfigs(configStats), [configStats]);
+
   useLayoutEffect(() => {
-    if (!configStats.length || !contentRef.current || !firstCardRef.current) {
+    if (!visibleConfigStats.length || !contentRef.current || !firstCardRef.current) {
       setTitleOffsetPx(0);
       return undefined;
     }
@@ -60,7 +66,7 @@ export default function GeminiPage({
     observer.observe(contentRef.current);
     observer.observe(firstCardRef.current);
     return () => observer.disconnect();
-  }, [configStats.length]);
+  }, [visibleConfigStats.length]);
 
   const filteredUsers = useMemo(
     () => users.filter((u) => (u.userPrincipal || '').toLowerCase().includes(search.toLowerCase())),
@@ -188,9 +194,9 @@ export default function GeminiPage({
           </Space>
         </Space>
 
-        {configStats.length > 0 && (
+        {visibleConfigStats.length > 0 && (
           <Row gutter={16} justify="center">
-            {configStats.map((c, idx) => (
+            {visibleConfigStats.map((c, idx) => (
               <Col key={c.name} xs={24} sm={12} md={CARD_SPAN}>
                 <Card
                   size="small"
@@ -295,7 +301,7 @@ export default function GeminiPage({
             rules={[{ required: true, message: 'Selecione uma licença' }]}
           >
             <Select size="large" prefix={<AppstoreOutlined style={{ color: '#94a3b8' }} />} placeholder="Selecione o plano...">
-              {configStats.map((c) => (
+              {visibleConfigStats.map((c) => (
                 <Select.Option key={c.name} value={c.name} disabled={c.remaining === 0}>
                   {c.label} — {c.remaining} slot{c.remaining !== 1 ? 's' : ''} disponível{c.remaining !== 1 ? 'eis' : ''}
                 </Select.Option>

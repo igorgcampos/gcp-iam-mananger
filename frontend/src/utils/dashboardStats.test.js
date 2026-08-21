@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import {
-  daysUntil, buildConfigStats, sumAssigned, sumRemaining, getExpiringSoonConfigs,
+  daysUntil, buildConfigStats, sumAssigned, sumRemaining, getExpiringSoonConfigs, getVisibleConfigs,
 } from './dashboardStats';
 
 describe('daysUntil', () => {
@@ -106,5 +106,54 @@ describe('getExpiringSoonConfigs', () => {
   it('excludes configs expiring further out than the withinDays window', () => {
     const stats = [{ name: 'a', autoRenew: false, daysUntilEnd: 31 }];
     expect(getExpiringSoonConfigs(stats, { withinDays: 30 })).toEqual([]);
+  });
+
+  it('includes a config still inside the 5-day grace window after expiring', () => {
+    const stats = [{ name: 'a', autoRenew: false, daysUntilEnd: -5 }];
+    expect(getExpiringSoonConfigs(stats)).toEqual(stats);
+  });
+
+  it('excludes a config once it is past the 5-day grace window', () => {
+    const stats = [{ name: 'a', autoRenew: false, daysUntilEnd: -6 }];
+    expect(getExpiringSoonConfigs(stats)).toEqual([]);
+  });
+
+  it('respects a custom graceDays option', () => {
+    const stats = [{ name: 'a', autoRenew: false, daysUntilEnd: -10 }];
+    expect(getExpiringSoonConfigs(stats, { graceDays: 10 })).toEqual(stats);
+    expect(getExpiringSoonConfigs(stats, { graceDays: 9 })).toEqual([]);
+  });
+});
+
+describe('getVisibleConfigs', () => {
+  it('keeps configs with auto-renew regardless of how negative daysUntilEnd is', () => {
+    const stats = [{ name: 'a', autoRenew: true, daysUntilEnd: -100 }];
+    expect(getVisibleConfigs(stats)).toEqual(stats);
+  });
+
+  it('keeps configs without a known end date', () => {
+    const stats = [{ name: 'a', autoRenew: false, daysUntilEnd: null }];
+    expect(getVisibleConfigs(stats)).toEqual(stats);
+  });
+
+  it('keeps a config still inside the 5-day grace window after expiring', () => {
+    const stats = [{ name: 'a', autoRenew: false, daysUntilEnd: -5 }];
+    expect(getVisibleConfigs(stats)).toEqual(stats);
+  });
+
+  it('drops a config once it is past the 5-day grace window', () => {
+    const stats = [{ name: 'a', autoRenew: false, daysUntilEnd: -6 }];
+    expect(getVisibleConfigs(stats)).toEqual([]);
+  });
+
+  it('keeps configs that have not expired yet', () => {
+    const stats = [{ name: 'a', autoRenew: false, daysUntilEnd: 100 }];
+    expect(getVisibleConfigs(stats)).toEqual(stats);
+  });
+
+  it('respects a custom graceDays option', () => {
+    const stats = [{ name: 'a', autoRenew: false, daysUntilEnd: -10 }];
+    expect(getVisibleConfigs(stats, { graceDays: 10 })).toEqual(stats);
+    expect(getVisibleConfigs(stats, { graceDays: 9 })).toEqual([]);
   });
 });

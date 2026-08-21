@@ -40,10 +40,37 @@ export function sumRemaining(configStats) {
   return configStats.reduce((sum, c) => sum + c.remaining, 0);
 }
 
+// Nº de dias, após a expiração, que uma Licença sem Renovação Automática
+// ainda aparece no Aviso de Expiração (Alert do Dashboard, card "Licenças
+// por camada" e resumo por camada/seletor de nível do Gemini Enterprise) —
+// ver "Janela de Carência" no CONTEXT.md. Passado esse prazo, some dessas
+// superfícies, mas Atribuições e totais continuam contando a Licença
+// normalmente (não é revogação, só deixa de ser oferecida/destacada).
+export const EXPIRED_GRACE_DAYS = 5;
+
+// Uma Licença com Renovação Automática nunca é tratada como expirada — a
+// data de expiração dela é apenas informativa (ver "Renovação Automática"
+// no CONTEXT.md).
+function isExpiredBeyondGrace(c, graceDays) {
+  return !c.autoRenew && c.daysUntilEnd !== null && c.daysUntilEnd < -graceDays;
+}
+
 // Licenças sem renovação automática que vencem dentro de `withinDays` (ou já
-// venceram, quando daysUntilEnd é negativo).
-export function getExpiringSoonConfigs(configStats, { withinDays = 30 } = {}) {
+// venceram, quando daysUntilEnd é negativo), mas ainda dentro da Janela de
+// Carência — passado esse prazo, a licença some do Aviso de Expiração.
+export function getExpiringSoonConfigs(configStats, { withinDays = 30, graceDays = EXPIRED_GRACE_DAYS } = {}) {
   return configStats.filter(
     (c) => !c.autoRenew && c.daysUntilEnd !== null && c.daysUntilEnd <= withinDays
+      && !isExpiredBeyondGrace(c, graceDays)
   );
+}
+
+// Licenças que ainda devem ser oferecidas/destacadas na UI: exclui as que já
+// passaram da Janela de Carência de expiração (ver "Aviso de Expiração" no
+// CONTEXT.md). Usada pelo card "Licenças por camada" do Dashboard e pelo
+// resumo por camada/seletor de nível do Gemini Enterprise — não pelos totais
+// agregados nem pelo filtro/tabela de Atribuições, que continuam refletindo
+// todas as licenças, expiradas ou não.
+export function getVisibleConfigs(configStats, { graceDays = EXPIRED_GRACE_DAYS } = {}) {
+  return configStats.filter((c) => !isExpiredBeyondGrace(c, graceDays));
 }
