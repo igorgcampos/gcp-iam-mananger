@@ -239,6 +239,7 @@ export default function GeminiPage({
           pagination={{ pageSize: 20, showSizeChanger: true }}
           bordered
           size="middle"
+          scroll={{ x: 'max-content' }}
           locale={{
             emptyText: (
               <Empty

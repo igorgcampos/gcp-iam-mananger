@@ -225,6 +225,7 @@ export default function IAMPage({
           pagination={{ pageSize: 20, showSizeChanger: true }}
           bordered
           size="small"
+          scroll={{ x: 'max-content' }}
           locale={{
             emptyText: (
               <Empty
