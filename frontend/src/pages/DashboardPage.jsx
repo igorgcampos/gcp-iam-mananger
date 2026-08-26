@@ -321,7 +321,7 @@ export default function DashboardPage({
                       showInfo={false}
                     />
                     <Text type="secondary" style={{ fontSize: 12, marginTop: 6, display: 'block' }}>
-                      {totalAssigned - codeAssistCount} usuário{totalAssigned - codeAssistCount !== 1 ? 's' : ''} sem acesso às ferramentas de IA
+                      {totalAssigned - codeAssistCount} usuário{totalAssigned - codeAssistCount !== 1 ? 's' : ''} com licença Gemini mas sem o papel Code Assist
                     </Text>
                   </div>
                   <div style={{
