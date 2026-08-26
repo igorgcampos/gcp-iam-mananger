@@ -38,8 +38,16 @@ export default function BillingCategoryCard({
     <Card
       size="small"
       bordered
-      className="stat-card"
-      style={{ borderRadius: 16, cursor: expandable ? 'pointer' : 'default' }}
+      // .stat-card traz o hover (borda navy + sombra) que sinaliza "isso é
+      // clicável" — antes ele era aplicado a TODOS os cards, inclusive o
+      // não-expansível ("Total do projeto"), convidando a um clique que não
+      // faz nada. Só os cards clicáveis ganham a classe agora; o não-clicável
+      // recebe um fundo levemente diferente pra se diferenciar já em repouso,
+      // sem depender de hover.
+      className={expandable ? 'stat-card' : undefined}
+      style={{
+        borderRadius: 16, cursor: expandable ? 'pointer' : 'default', background: expandable ? undefined : '#fafbfc',
+      }}
       role={expandable ? 'button' : undefined}
       tabIndex={expandable ? 0 : undefined}
       aria-expanded={expandable ? expanded : undefined}
@@ -120,6 +128,22 @@ export default function BillingCategoryCard({
         />
         {hint && <Text style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8' }}>{hint}</Text>}
       </div>
+
+      {/* Antes o único sinal de "isso abre detalhes" era a seta de 12px no
+          canto — fácil de não notar. Agora o card diz isso já em repouso,
+          sem depender de hover. Some quando expandido, porque o próprio
+          conteúdo do drill-down já deixa claro o que aconteceu. */}
+      {expandable && !expanded && (
+        <div style={{
+          marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e2e8f0',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.04em',
+        }}
+        >
+          Clique para detalhar
+          <DownOutlined style={{ fontSize: 10 }} />
+        </div>
+      )}
 
       {expandable && expanded && (
         <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
