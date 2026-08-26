@@ -107,14 +107,17 @@ export default function DashboardPage({
     [configs, geminiUsers]
   );
 
-  const totalAssigned = useMemo(() => sumAssigned(configStats), [configStats]);
-  const totalRemaining = useMemo(() => sumRemaining(configStats), [configStats]);
-  const expiringSoon = useMemo(() => getExpiringSoonConfigs(configStats), [configStats]);
-
-  // Card "Licenças por camada": some das licenças que já passaram da Janela
-  // de Carência de expiração (ver CONTEXT.md). Não afeta totalAssigned/
-  // totalRemaining acima, que continuam somando todas as licenças.
+  // "Licenças por camada" e "Slots livres" somem das licenças que já
+  // passaram da Janela de Carência de expiração (ver CONTEXT.md) — um slot
+  // livre numa licença expirada não pode ser oferecido a um novo usuário.
+  // Já totalAssigned (usado em "Licenças atribuídas" e Code Assist) continua
+  // somando todas as licenças, expiradas ou não: serve para localizar quem
+  // ainda precisa migrar, não para decidir o que oferecer.
   const visibleConfigStats = useMemo(() => getVisibleConfigs(configStats), [configStats]);
+
+  const totalAssigned = useMemo(() => sumAssigned(configStats), [configStats]);
+  const totalRemaining = useMemo(() => sumRemaining(visibleConfigStats), [visibleConfigStats]);
+  const expiringSoon = useMemo(() => getExpiringSoonConfigs(configStats), [configStats]);
 
   const hasExpired = expiringSoon.some((c) => c.daysUntilEnd < 0);
 
