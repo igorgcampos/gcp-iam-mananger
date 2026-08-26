@@ -16,7 +16,7 @@ import {
 const { Title, Text } = Typography;
 
 function StatCard({
-  icon, iconBg, iconColor, label, value, hint, hintColor, onClick,
+  icon, iconBg, iconColor, label, value, hint, hintColor, valueColor, onClick,
 }) {
   return (
     <Card
@@ -38,7 +38,11 @@ function StatCard({
         <Text strong type="secondary" style={{ fontSize: 13 }}>{label}</Text>
       </Space>
       <div style={{ marginTop: 12, display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <Statistic value={value} valueStyle={{ fontSize: 28, fontWeight: 800, color: '#192645' }} />
+        {/* valueColor deixa o número herdar a cor de risco (ex: vermelho
+            quando o KPI está em estado crítico) — antes só o hint pequeno
+            embaixo mudava de cor, e o número grande (o que mais salta aos
+            olhos) ficava sempre neutro mesmo em 0/crítico. */}
+        <Statistic value={value} valueStyle={{ fontSize: 28, fontWeight: 800, color: valueColor || '#192645' }} />
         {hint && <Text style={{ fontSize: 12, fontWeight: 700, color: hintColor || '#94a3b8' }}>{hint}</Text>}
       </div>
     </Card>
@@ -174,7 +178,11 @@ export default function DashboardPage({
               Resumo ao vivo dos acessos IAM e das licenças Gemini Enterprise.
             </Text>
           </Space>
-          <Space wrap>
+          {/* Busca é a ação primária da barra — fica com o peso visual
+              maior, num nível próprio. "Atualizado"/"Atualizar" são
+              informação de apoio, não uma ação equivalente à busca, então
+              viram uma linha menor e mais discreta abaixo dela. */}
+          <Space direction="vertical" align="end" size={8}>
             <AutoComplete
               style={{ width: 320 }}
               options={searchOptions}
@@ -189,20 +197,31 @@ export default function DashboardPage({
                 placeholder="Buscar por email em IAM ou Gemini..."
               />
             </AutoComplete>
-            {lastUpdated && (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                Atualizado: {lastUpdated.toLocaleTimeString('pt-BR')}
-              </Text>
-            )}
-            <Button icon={<ReloadOutlined />} onClick={() => reload()} loading={loading}>
-              Atualizar
-            </Button>
+            <Space size={8} align="center">
+              {lastUpdated && (
+                <Text type="secondary" style={{ fontSize: 12, color: '#94a3b8' }}>
+                  Atualizado: {lastUpdated.toLocaleTimeString('pt-BR')}
+                </Text>
+              )}
+              <Button
+                type="text"
+                shape="circle"
+                size="small"
+                icon={<ReloadOutlined style={{ fontSize: 12 }} />}
+                onClick={() => reload()}
+                loading={loading}
+                aria-label="Atualizar"
+              />
+            </Space>
           </Space>
         </Space>
 
         <Spin spinning={loading}>
           <Space direction="vertical" style={{ width: '100%' }} size="large">
             {expiringSoon.length > 0 && (
+              // O alerta avisava do problema mas não dava um jeito de agir a
+              // partir dele — `action` (slot nativo do Alert do antd) leva
+              // direto pra página onde a licença se resolve.
               <Alert
                 type={hasExpired ? 'error' : 'warning'}
                 showIcon
@@ -219,6 +238,11 @@ export default function DashboardPage({
                       </Text>
                     ))}
                   </Space>
+                )}
+                action={(
+                  <Button size="small" type="link" onClick={() => onNavigate?.('gemini')}>
+                    Ver licenças
+                  </Button>
                 )}
               />
             )}
@@ -256,6 +280,7 @@ export default function DashboardPage({
                 value={totalRemaining}
                 hint={totalRemaining === 0 ? 'Sem disponibilidade' : undefined}
                 hintColor="#dc2626"
+                valueColor={totalRemaining === 0 ? '#dc2626' : undefined}
               />
               <StatCard
                 icon={<ClockCircleOutlined />}
@@ -265,6 +290,7 @@ export default function DashboardPage({
                 value={inactiveReport.length}
                 hint={`≥ ${DASHBOARD_INACTIVITY_MONTHS} meses sem uso`}
                 hintColor={inactiveReport.length > 0 ? '#dc2626' : '#94a3b8'}
+                valueColor={inactiveReport.length > 0 ? '#dc2626' : undefined}
                 onClick={handleOpenInactivityReport}
               />
             </div>
@@ -314,26 +340,40 @@ export default function DashboardPage({
               >
                 {visibleConfigStats.length > 0 ? (
                   <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                    {visibleConfigStats.map((c) => (
-                      <div
-                        key={c.name}
-                        style={{
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          padding: '10px 12px', borderRadius: 10, background: '#f8fafc',
-                        }}
-                      >
-                        <Space direction="vertical" size={2}>
-                          <Tag color={tierColor(c.label)} style={{ margin: 0, width: 'fit-content' }}>{c.label}</Tag>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
+                    {visibleConfigStats.map((c) => {
+                      const pct = c.total ? Math.round((c.assigned / c.total) * 100) : 0;
+                      const barColor = c.remaining === 0 ? '#dc2626' : '#16a34a';
+                      return (
+                        <div
+                          key={c.name}
+                          style={{ padding: '10px 12px', borderRadius: 10, background: '#f8fafc' }}
+                        >
+                          <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8,
+                          }}
+                          >
+                            <Tag color={tierColor(c.label)} style={{ margin: 0 }}>{c.label}</Tag>
+                            <Text strong style={{ color: barColor }}>
+                              {c.assigned} / {c.total}
+                            </Text>
+                          </div>
+                          {/* Barra de progresso por camada, no mesmo padrão
+                              do card "Resumo IAM" ao lado — antes esse card
+                              só mostrava números, então a mesma tela ensinava
+                              duas formas diferentes de ler "quão cheio está". */}
+                          <Progress
+                            percent={pct}
+                            size="small"
+                            strokeColor={barColor}
+                            showInfo={false}
+                          />
+                          <Text type="secondary" style={{ fontSize: 12, marginTop: 6, display: 'block' }}>
                             {c.remaining} slot{c.remaining !== 1 ? 's' : ''} disponíve{c.remaining !== 1 ? 'is' : 'l'}
                             {c.end && (c.autoRenew ? ` · renova em ${c.end}` : ` · expira em ${c.end}`)}
                           </Text>
-                        </Space>
-                        <Text strong style={{ color: c.remaining === 0 ? '#dc2626' : '#16a34a' }}>
-                          {c.assigned} / {c.total}
-                        </Text>
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </Space>
                 ) : (
                   <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nenhuma configuração de licença encontrada" />
