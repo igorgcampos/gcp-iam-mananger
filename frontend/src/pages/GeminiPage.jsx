@@ -171,23 +171,37 @@ export default function GeminiPage({
             <Title level={4} style={{ margin: 0, whiteSpace: 'nowrap' }}>Gemini Enterprise — Licenças</Title>
             <Badge count={totalAssigned} showZero color="#722ed1" />
           </Space>
-          <Space wrap style={{ justifyContent: 'flex-end' }}>
-            {lastUpdated && (
-              <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                Atualizado: {lastUpdated.toLocaleTimeString('pt-BR')}
-              </Text>
-            )}
-            <Button icon={<ReloadOutlined />} onClick={() => reload()} loading={loading}>
-              Atualizar
-            </Button>
-            <InactivityReportModal
-              users={users}
-              configs={configs}
-              onRemove={handleRemove}
-              initialOpen={!!openInactivityReport}
-              initialThreshold={openInactivityReport?.thresholdMonths}
-            />
-            <CopyUsersReportButton users={users} configs={configs} />
+          {/* 5 controles com o mesmo peso visual numa linha só viravam ruído
+              — agora são 3 grupos: meta discreto (atualizado/atualizar),
+              ações secundárias agrupadas (Space.Compact funde as bordas) e
+              o CTA primário isolado. */}
+          <Space size={14} wrap style={{ justifyContent: 'flex-end' }}>
+            <Space size={8} align="center">
+              {lastUpdated && (
+                <Text type="secondary" style={{ fontSize: 12, color: '#94a3b8', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  Atualizado: {lastUpdated.toLocaleTimeString('pt-BR')}
+                </Text>
+              )}
+              <Button
+                type="text"
+                shape="circle"
+                size="small"
+                icon={<ReloadOutlined style={{ fontSize: 12 }} />}
+                onClick={() => reload()}
+                loading={loading}
+                aria-label="Atualizar"
+              />
+            </Space>
+            <Space.Compact>
+              <InactivityReportModal
+                users={users}
+                configs={configs}
+                onRemove={handleRemove}
+                initialOpen={!!openInactivityReport}
+                initialThreshold={openInactivityReport?.thresholdMonths}
+              />
+              <CopyUsersReportButton users={users} configs={configs} />
+            </Space.Compact>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
               Adicionar usuário
             </Button>
@@ -202,6 +216,10 @@ export default function GeminiPage({
                   size="small"
                   bordered
                   className="stat-card"
+                  // Sem isso o card cai no raio padrão do antd (8px) —
+                  // Dashboard e Custos já usam 16px em todo card da mesma
+                  // família visual.
+                  style={{ borderRadius: 16 }}
                   ref={idx === 0 ? firstCardRef : undefined}
                 >
                   <Statistic
