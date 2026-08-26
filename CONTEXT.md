@@ -8,6 +8,22 @@ Painel web que permite administrar, sem usar o console do GCP diretamente, quem 
 Um tier de assinatura do Gemini Enterprise/Agentspace atribuído a um usuário do Workspace. Hoje existem dois tiers: **Gemini Enterprise Standard** e **Agentspace Enterprise Plus**.
 _Avoid_: Subscription tier, plano
 
+**Renovação Automática** (`autoRenew`):
+Atributo de uma Licença que indica se ela se renova sozinha ao fim do período de assinatura, sem depender de ação do Operador. Uma Licença com Renovação Automática nunca é tratada como expirando/expirada pela UI — nenhum Aviso de Expiração, Janela de Carência ou corte por data se aplica a ela, mesmo que sua data de expiração esteja no passado.
+_Avoid_: Renovação (sem qualificar "automática" — toda Licença tem data de expiração, mas nem toda se renova sozinha)
+
+**Licença Expirada**:
+Uma Licença sem Renovação Automática cuja data de expiração já passou. Continua existindo e suas Atribuições continuam válidas — usuários mantêm acesso e contam nos totais — até serem removidas manualmente; expirar não revoga nada sozinho, só muda o que o Aviso de Expiração decide mostrar.
+_Avoid_: Licença vencida (usar sempre "expirada", consistente com o campo `endDate`/rótulo "Expira em" já usados na UI)
+
+**Janela de Carência** (de expiração):
+O período de 5 dias corridos após a data de expiração de uma Licença Expirada durante o qual ela ainda aparece no Aviso de Expiração; passada a Janela de Carência, a Licença some dessas superfícies — mas não das que listam ou filtram Atribuições existentes (ver Aviso de Expiração).
+_Avoid_: Grace period (usar o termo em português), "tolerância" sozinho sem "janela"
+
+**Aviso de Expiração**:
+O conjunto de superfícies de UI que refletem o estado de expiração de uma Licença: o Alert de expiração e o card "Licenças por camada" no Dashboard, e o resumo por camada e o seletor de nível no formulário de nova Atribuição na tela Gemini Enterprise. Uma Licença Expirada além da Janela de Carência desaparece de todas essas superfícies. Deliberadamente **não inclui** os totais agregados (Licenças atribuídas, Slots livres, badge de total) nem o filtro/linhas da tabela de Atribuições — esses continuam refletindo a Licença Expirada normalmente, porque servem para localizar quem ainda precisa migrar, não para decidir se a Licença deve ser oferecida a novos usuários.
+_Avoid_: Alerta de licença (ambíguo com **Alerta de Custo**, conceito não relacionado, de Billing)
+
 **Atribuição (License Assignment)**:
 O vínculo entre um usuário e uma Licença, criado em uma data (`Atribuída em`) e com um Status próprio. É o registro central sobre o qual se avalia uso e inatividade.
 _Avoid_: User license, binding
@@ -73,7 +89,7 @@ _Escopo por projeto_: o card de Licenças na página de Billing tem um seletor d
 _Avoid_: Custo Gemini (termo aposentado pela ADR 0011)
 
 **Custo de API** (anteriormente parte do "Custo Gemini" — separado na [ADR 0011](docs/adr/0011-separacao-custo-licencas-e-api.md)):
-Subcategoria do Custo do Projeto: soma dos Serviços cujo `service.description` é `"Vertex AI"` (lista `API_SERVICES`, `backend/src/services/billingService.js`) — o consumo de modelo/LLM subjacente ao Gemini Enterprise/Agentspace, cobrado por uso (não por assinatura). Contraparte do Custo de Licenças: mesma origem de dados (Billing Export) e mesma família de produto, mas natureza de custo diferente — por isso vive em card próprio desde a ADR 0011.
+Subcategoria do Custo do Projeto: soma dos Serviços cujo `service.description` está em `["Vertex AI", "Gemini API"]` (lista `API_SERVICES`, `backend/src/services/billingService.js`) — o consumo de modelo/LLM, cobrado por uso (não por assinatura). `Vertex AI` é a API enterprise subjacente ao Gemini Enterprise/Agentspace; `Gemini API` é um produto GCP diferente (a API "direta" do Gemini, tipo AI Studio, tipicamente usada em projetos de teste/POC) — os dois entram na mesma categoria de domínio porque representam o mesmo tipo de custo (consumo de modelo), ver [ADR 0013](docs/adr/0013-gemini-api-entra-em-custo-de-api.md). Contraparte do Custo de Licenças: mesma origem de dados (Billing Export) e mesma família de produto, mas natureza de custo diferente — por isso vive em card próprio desde a ADR 0011.
 _Escopo por projeto_: o card de API na página de Billing tem um seletor de projeto próprio (padrão: "Todos os projetos"), independente do seletor do card de Licenças. Fora do escopo `agentspace-469418`, segue o mesmo mecanismo do Custo de Licenças — mesma query cross-project, dividida em memória por Serviço.
 _Avoid_: Custo Gemini (termo aposentado pela ADR 0011)
 
@@ -96,3 +112,19 @@ _Avoid_: usar "SKU" para o que na verdade é Serviço (confusão histórica dest
 **Billing Export (Standard usage cost)**:
 Mecanismo do GCP, já habilitado na Billing Account "Projetos Editora Globo", que grava diariamente o custo por SKU de todos os projetos da Billing Account (71 no momento desta decisão) numa tabela do BigQuery: `infra-bi-355620.billing_standard.gcp_billing_export_v1_01779C_55AF20_FD92F6` — o sufixo do nome da tabela é o ID da Billing Account, não de um projeto. É a fonte de dados de toda a página de Billing; consultada diretamente (schema padrão do Google), sem depender das tabelas/views internas de FinOps (`tbCusto*`, `vwResultadoMes*`) que outro time mantém no mesmo dataset. Distinto de **Detailed usage cost** (outro tipo de export, desabilitado, que adicionaria granularidade por recurso individual — não usado por esta feature).
 _Avoid_: Billing export genérico (especificar sempre "Standard usage cost" quando a distinção importar), export de faturamento
+
+**Alerta de Custo** (ver [ADR 0012](docs/adr/0012-alerta-de-aumento-de-custo-por-sku.md)):
+Aviso exibido na página de Custos quando uma SKU foge do padrão recente de gasto, calculado sobre as quatro subcategorias do Custo do Projeto (Licenças, API, Infra, Outros Serviços) e sempre atribuído a um projeto específico — nunca ao agregado "Todos os projetos" das visões cross-project de Licenças/API. Tem dois subtipos, **Alerta de Aumento do SKU** e **Novo SKU no Billing**; a lista completa vive em `summary.alerts`, recalculada junto do resto do resumo (mesmo cache de 4h do backend) — não existe estado de "visto"/"dispensado", o alerta sempre reflete a situação atual.
+_Avoid_: Spike, notificação de custo
+
+**Dia de Referência do Alerta**:
+O dia tratado como "hoje" para fins de Alerta de Custo — sempre o dia anterior ao momento da consulta, nunca o dia corrente em andamento, porque o Billing Export só atualiza 1x/dia e o dia corrente estaria com dados incompletos.
+_Avoid_: Hoje (ambíguo nesse contexto — em Alerta de Custo, nunca é o dia corrente)
+
+**Alerta de Aumento do SKU**:
+Subtipo de Alerta de Custo: dispara quando o custo de uma SKU já existente, no Dia de Referência do Alerta e em um projeto específico, supera ao mesmo tempo dois limiares em relação à média móvel dos 7 dias anteriores (exige um mínimo de 3 dias de histórico pra ser avaliado): +R$300 em valor absoluto E +50% em termos percentuais. Os dois critérios valem juntos — só percentual gera ruído em SKUs pequenas, só absoluto ignora crescimento proporcional relevante em SKUs caras.
+_Avoid_: Spike de SKU, pico de custo
+
+**Novo SKU no Billing**:
+Subtipo de Alerta de Custo: dispara quando uma SKU tem custo maior que zero no Dia de Referência do Alerta, mas nenhum custo em nenhum dos 7 dias anteriores, no mesmo projeto — tratado à parte do Alerta de Aumento do SKU porque não há média válida pra comparar (divisão por zero), e porque semanticamente é uma cobrança nova, não um aumento.
+_Avoid_: SKU nova sozinho sem contexto (ambíguo com "SKU nova esse mês")
