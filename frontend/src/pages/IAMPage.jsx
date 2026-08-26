@@ -5,6 +5,7 @@ import {
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, ReloadOutlined, KeyOutlined, SearchOutlined, UserAddOutlined, MailOutlined,
+  CheckOutlined,
 } from '@ant-design/icons';
 import { addIAMUser, removeIAMUser, addCodeAssist, removeCodeAssist } from '../api/iam';
 import { notifyFetchError } from '../utils/apiError';
@@ -120,17 +121,13 @@ export default function IAMPage({
       ),
     },
     {
-      title: 'Role',
-      key: 'role',
-      width: 150,
-      align: 'center',
-      render: () => <Tag color="blue">discoveryengine.user</Tag>,
-    },
-    {
       title: 'Code Assist',
       key: 'codeAssist',
       width: 120,
       align: 'center',
+      // Os dois estados (concedido/conceder) são a mesma "pílula" — só muda
+      // preenchido vs. tracejado e o ícone — pra deixar visualmente claro
+      // que é um toggle único, e não dois controles diferentes.
       render: (_, record) =>
         record.codeAssist ? (
           <Popconfirm
@@ -142,9 +139,11 @@ export default function IAMPage({
           >
             <Button
               size="small"
-              type="text"
-              style={{ color: '#389e0d' }}
+              icon={<CheckOutlined style={{ fontSize: 10 }} />}
               loading={codeAssistLoading.has(record.email)}
+              style={{
+                borderRadius: 999, background: '#f0fdf4', borderColor: '#bbf7d0', color: '#16a34a', fontWeight: 600,
+              }}
             >
               Code Assist
             </Button>
@@ -152,9 +151,12 @@ export default function IAMPage({
         ) : (
           <Button
             size="small"
-            type="link"
+            icon={<PlusOutlined style={{ fontSize: 10 }} />}
             loading={codeAssistLoading.has(record.email)}
             onClick={() => handleGrantCodeAssist(record.email)}
+            style={{
+              borderRadius: 999, borderStyle: 'dashed', borderColor: '#cbd5e1', color: '#64748b', fontWeight: 600,
+            }}
           >
             Conceder
           </Button>
@@ -187,11 +189,19 @@ export default function IAMPage({
   return (
     <div style={{ padding: 24 }}>
       <Space direction="vertical" style={{ width: '100%' }} size="large">
-        <Space style={{ justifyContent: 'space-between', width: '100%' }}>
-          <Space>
-            <KeyOutlined style={{ fontSize: 20, color: token.colorPrimary }} />
-            <Title level={4} style={{ margin: 0 }}>IAM — Discovery Engine User</Title>
-            <Badge count={users.length} showZero color={token.colorPrimary} />
+        <Space style={{ justifyContent: 'space-between', width: '100%' }} align="start">
+          <Space direction="vertical" size={4}>
+            <Space>
+              <KeyOutlined style={{ fontSize: 20, color: token.colorPrimary }} />
+              <Title level={4} style={{ margin: 0 }}>IAM — Discovery Engine User</Title>
+              <Badge count={users.length} showZero color={token.colorPrimary} />
+            </Space>
+            {/* A coluna "Role" da tabela mostrava sempre o mesmo valor em
+                toda linha — virou uma legenda única aqui em vez de repetir
+                zero informação em cada linha da tabela. */}
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Todos os usuários abaixo têm a role <Tag color="blue" style={{ margin: 0 }}>discoveryengine.user</Tag>
+            </Text>
           </Space>
           <Space>
             {lastUpdated && (
