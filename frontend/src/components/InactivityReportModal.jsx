@@ -85,7 +85,22 @@ export default function InactivityReportModal({
       title: 'Tempo inativo',
       dataIndex: 'monthsInactive',
       key: 'monthsInactive',
-      render: (v) => <Tag color="red" icon={<WarningOutlined />}>{formatMonthsInactive(v)}</Tag>,
+      // Todo mundo nesta tabela já passou do limiar — sem isso, a mesma tag
+      // vermelha aparecia em 100% das linhas e não dizia nada sobre
+      // gravidade. Passa a escalonar: perto do limiar (< 2x) fica âmbar,
+      // bem além dele fica vermelho.
+      render: (v) => (
+        <Tag color={v >= thresholdMonths * 2 ? 'red' : 'orange'} icon={<WarningOutlined />}>
+          {formatMonthsInactive(v)}
+        </Tag>
+      ),
+      // buildInactivityReport já entrega os dados ordenados por
+      // monthsInactive decrescente (utils/inactivity.js) — o sorter aqui não
+      // muda a ordem inicial, só dá o controle/indicador interativo que
+      // faltava (sem ele não dava pra confirmar visualmente que a ordem era
+      // intencional, nem pra inverter/limpar).
+      sorter: (a, b) => (a.monthsInactive ?? 0) - (b.monthsInactive ?? 0),
+      defaultSortOrder: 'descend',
     },
     {
       title: 'Ações',
@@ -128,28 +143,35 @@ export default function InactivityReportModal({
         centered
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Space wrap>
-            <Text>Inativo há mais de</Text>
-            <Select
-              value={thresholdMonths}
-              onChange={setThresholdMonths}
-              size="large"
-              style={{ width: 160 }}
-              options={INACTIVITY_MONTH_OPTIONS.map((m) => ({
-                value: m,
-                label: `${m} ${m === 1 ? 'mês' : 'meses'}`,
-              }))}
-            />
-            <Text type="secondary">
-              {report.length} de {assignedTotal} usuários inativos
-            </Text>
-            <Button
-              icon={<CopyOutlined />}
-              onClick={handleCopy}
-              disabled={report.length === 0}
-            >
-              Copiar tabela
-            </Button>
+          {/* Filtro (ação primária) à esquerda; contagem + "Copiar tabela"
+              (secundários) agrupados à direita — antes os três ficavam
+              soltos numa fileira só, sem separação nenhuma. */}
+          <Space style={{ justifyContent: 'space-between', width: '100%' }} wrap>
+            <Space>
+              <Text>Inativo há mais de</Text>
+              <Select
+                value={thresholdMonths}
+                onChange={setThresholdMonths}
+                size="large"
+                style={{ width: 160 }}
+                options={INACTIVITY_MONTH_OPTIONS.map((m) => ({
+                  value: m,
+                  label: `${m} ${m === 1 ? 'mês' : 'meses'}`,
+                }))}
+              />
+            </Space>
+            <Space size={12}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {report.length} de {assignedTotal} usuários inativos
+              </Text>
+              <Button
+                icon={<CopyOutlined />}
+                onClick={handleCopy}
+                disabled={report.length === 0}
+              >
+                Copiar tabela
+              </Button>
+            </Space>
           </Space>
           <Table
             dataSource={report}
