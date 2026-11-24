@@ -16,6 +16,7 @@ import { getMe, logout } from './api/auth';
 import { useIamData } from './hooks/useIamData';
 import { useGeminiData } from './hooks/useGeminiData';
 import { useBillingData } from './hooks/useBillingData';
+import { useDiretoriaData } from './hooks/useDiretoriaData';
 // Versão otimizada (192×192, ~30KB) do arquivo original enviado — o badge é
 // exibido a 64px, então não faz sentido carregar o PNG de 1024px/1,4MB.
 import logo from './assets/logo-192.png';
@@ -165,6 +166,12 @@ export default function App() {
   const iam = useIamData({ enabled: authState === 'authenticated' });
   const gemini = useGeminiData({ enabled: authState === 'authenticated' });
   const billing = useBillingData({ enabled: authState === 'authenticated' });
+  // Depende da lista do Gemini: busca as Diretorias no AD depois dela, e
+  // retenta a cada tick do polling do Gemini se a última busca falhou.
+  const diretoria = useDiretoriaData(gemini.users, {
+    enabled: authState === 'authenticated',
+    refreshToken: gemini.lastUpdated,
+  });
 
   useEffect(() => {
     localStorage.setItem(SIDER_COLLAPSED_KEY, collapsed ? '1' : '0');
@@ -394,6 +401,7 @@ export default function App() {
               loading={gemini.loading}
               lastUpdated={gemini.lastUpdated}
               reload={gemini.reload}
+              diretorias={diretoria.diretorias}
               initialSearch={pendingSearch}
               openInactivityReport={pendingInactivityReport}
             />
