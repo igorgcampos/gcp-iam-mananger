@@ -15,13 +15,17 @@ import { buildConfigStats, sumAssigned, getVisibleConfigs } from '../utils/dashb
 import { notifyFetchError } from '../utils/apiError';
 import InactivityReportModal from '../components/InactivityReportModal';
 import CopyUsersReportButton from '../components/CopyUsersReportButton';
+import DiretoriaStatsCard from '../components/DiretoriaStatsCard';
+import {
+  SEM_DIRETORIA, getDiretoria, userDiretoriaKey, buildDiretoriaStats, buildDiretoriaFilters,
+} from '../utils/diretoria';
 
 const { Title, Text } = Typography;
 
 const CARD_SPAN = 8; // matches Col md={8} below
 
 export default function GeminiPage({
-  users, configs, loading, lastUpdated, reload, initialSearch = '', openInactivityReport = null,
+  users, configs, loading, lastUpdated, reload, diretorias = null, initialSearch = '', openInactivityReport = null,
 }) {
   const contentRef = useRef(null);
   const firstCardRef = useRef(null);
@@ -50,6 +54,11 @@ export default function GeminiPage({
   // de usuários e seu filtro de "Licença" continuam usando configStats
   // completo — servem para localizar quem ainda precisa migrar.
   const visibleConfigStats = useMemo(() => getVisibleConfigs(configStats), [configStats]);
+
+  // Rateio por Diretoria (ver CONTEXT.md) — vazio enquanto as Diretorias não
+  // chegaram do AD ou se a busca falhou; aí o card simplesmente não aparece.
+  const diretoriaStats = useMemo(() => buildDiretoriaStats(users, diretorias), [users, diretorias]);
+  const diretoriaFilters = useMemo(() => buildDiretoriaFilters(users, diretorias), [users, diretorias]);
 
   useLayoutEffect(() => {
     if (!visibleConfigStats.length || !contentRef.current || !firstCardRef.current) {
@@ -108,6 +117,20 @@ export default function GeminiPage({
       key: 'userPrincipal',
       render: (v) => <Text strong>{v}</Text>,
       sorter: (a, b) => (a.userPrincipal || '').localeCompare(b.userPrincipal || ''),
+    },
+    {
+      title: 'Diretoria',
+      key: 'diretoria',
+      render: (_, record) => {
+        const value = getDiretoria(record.userPrincipal, diretorias);
+        if (value === undefined) return <Text type="secondary">—</Text>;
+        if (value === null) return <Tag>{SEM_DIRETORIA}</Tag>;
+        return value;
+      },
+      filters: diretoriaFilters,
+      onFilter: (value, record) => userDiretoriaKey(record.userPrincipal, diretorias) === value,
+      sorter: (a, b) => (getDiretoria(a.userPrincipal, diretorias) ?? '')
+        .localeCompare(getDiretoria(b.userPrincipal, diretorias) ?? ''),
     },
     {
       title: 'Licença',
@@ -200,7 +223,7 @@ export default function GeminiPage({
                 initialOpen={!!openInactivityReport}
                 initialThreshold={openInactivityReport?.thresholdMonths}
               />
-              <CopyUsersReportButton users={users} configs={configs} />
+              <CopyUsersReportButton users={users} configs={configs} diretorias={diretorias} />
             </Space.Compact>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
               Adicionar usuário
@@ -241,6 +264,14 @@ export default function GeminiPage({
                 </Card>
               </Col>
             ))}
+          </Row>
+        )}
+
+        {diretoriaStats.length > 0 && (
+          <Row gutter={16} justify="center">
+            <Col xs={24} md={CARD_SPAN * 2}>
+              <DiretoriaStatsCard stats={diretoriaStats} />
+            </Col>
           </Row>
         )}
 
