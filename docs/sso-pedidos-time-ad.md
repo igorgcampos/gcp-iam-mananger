@@ -19,10 +19,11 @@ Checklist do que precisa ser pedido/confirmado com o time de AD (Entra ID / Micr
 
 ## 3. Permissão de API (Microsoft Graph)
 
-Duas permissões de **aplicação** (não delegadas), com **admin consent concedido** pelo time de AD:
+Três permissões de **aplicação** (não delegadas), com **admin consent concedido** pelo time de AD:
 
 - `GroupMember.Read.All`
 - `User.ReadBasic.All`
+- `User.Read.All` — concedida em 24/11/2026 para ler o `extensionAttribute4` (Diretoria do Usuário, ver [ADR 0014](adr/0014-diretoria-lida-do-entra-id.md)). `User.ReadBasic.All` não expõe `onPremisesExtensionAttributes`, e sem `User.Read.All` o Graph não dá erro: devolve o campo como `null` silenciosamente. Para conferir se está ativa, o token de aplicação precisa trazer `User.Read.All` no claim `roles` — se não trouxer, falta o "Grant admin consent" ou a permissão foi adicionada como *Delegated*.
 
 Usadas pelo backend via Client Credentials Flow para chamar `POST /v1.0/users/{oid}/checkMemberGroups` **apenas no momento do login** (nunca por requisição — ver ADR 0005).
 
