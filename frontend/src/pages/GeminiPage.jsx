@@ -1,5 +1,5 @@
 import React, {
-  useState, useMemo, useRef, useLayoutEffect, useEffect,
+  useState, useMemo, useEffect,
 } from 'react';
 import {
   Table, Button, Modal, Form, Input, Select, Popconfirm,
@@ -16,10 +16,8 @@ import { notifyFetchError } from '../utils/apiError';
 import InactivityReportModal from '../components/InactivityReportModal';
 import CopyUsersReportButton from '../components/CopyUsersReportButton';
 import DiretoriaStatsCard from '../components/DiretoriaStatsCard';
-import {
-  SEM_DIRETORIA, getDiretoria, userDiretoriaKey, buildDiretoriaStats, buildDiretoriaFilters,
-  countUnknownAssigned,
-} from '../utils/diretoria';
+import { buildDiretoriaStats, countUnknownAssigned } from '../utils/diretoria';
+import { buildDiretoriaColumn } from '../utils/diretoriaColumn';
 
 const { Title, Text } = Typography;
 
@@ -28,9 +26,6 @@ const CARD_SPAN = 8; // matches Col md={8} below
 export default function GeminiPage({
   users, configs, loading, lastUpdated, reload, diretorias = null, initialSearch = '', openInactivityReport = null,
 }) {
-  const contentRef = useRef(null);
-  const firstCardRef = useRef(null);
-  const [titleOffsetPx, setTitleOffsetPx] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState(initialSearch);
@@ -60,24 +55,7 @@ export default function GeminiPage({
   // chegaram do AD ou se a busca falhou; aí o card simplesmente não aparece.
   const diretoriaStats = useMemo(() => buildDiretoriaStats(users, diretorias), [users, diretorias]);
   const diretoriaUnknown = useMemo(() => countUnknownAssigned(users, diretorias), [users, diretorias]);
-  const diretoriaFilters = useMemo(() => buildDiretoriaFilters(users, diretorias), [users, diretorias]);
-
-  useLayoutEffect(() => {
-    if (!visibleConfigStats.length || !contentRef.current || !firstCardRef.current) {
-      setTitleOffsetPx(0);
-      return undefined;
-    }
-    const measure = () => {
-      const containerLeft = contentRef.current.getBoundingClientRect().left;
-      const cardLeft = firstCardRef.current.getBoundingClientRect().left;
-      setTitleOffsetPx(Math.max(0, cardLeft - containerLeft));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(contentRef.current);
-    observer.observe(firstCardRef.current);
-    return () => observer.disconnect();
-  }, [visibleConfigStats.length]);
+  const diretoriaColumn = useMemo(() => buildDiretoriaColumn(users, diretorias), [users, diretorias]);
 
   const filteredUsers = useMemo(
     () => users.filter((u) => (u.userPrincipal || '').toLowerCase().includes(search.toLowerCase())),
@@ -120,20 +98,7 @@ export default function GeminiPage({
       render: (v) => <Text strong>{v}</Text>,
       sorter: (a, b) => (a.userPrincipal || '').localeCompare(b.userPrincipal || ''),
     },
-    {
-      title: 'Diretoria',
-      key: 'diretoria',
-      render: (_, record) => {
-        const value = getDiretoria(record.userPrincipal, diretorias);
-        if (value === undefined) return <Text type="secondary">—</Text>;
-        if (value === null) return <Tag>{SEM_DIRETORIA}</Tag>;
-        return value;
-      },
-      filters: diretoriaFilters,
-      onFilter: (value, record) => userDiretoriaKey(record.userPrincipal, diretorias) === value,
-      sorter: (a, b) => (getDiretoria(a.userPrincipal, diretorias) ?? '')
-        .localeCompare(getDiretoria(b.userPrincipal, diretorias) ?? ''),
-    },
+    diretoriaColumn,
     {
       title: 'Licença',
       dataIndex: 'licenseConfig',
@@ -188,10 +153,10 @@ export default function GeminiPage({
 
   return (
     <div style={{ padding: 24 }}>
-      <div ref={contentRef}>
+      <div>
       <Space direction="vertical" style={{ width: '100%' }} size="large">
         <Space style={{ justifyContent: 'space-between', width: '100%' }}>
-          <Space style={{ marginLeft: titleOffsetPx, flexShrink: 0 }}>
+          <Space style={{ flexShrink: 0 }}>
             <RobotOutlined style={{ fontSize: 20, color: '#722ed1' }} />
             <Title level={4} style={{ margin: 0, whiteSpace: 'nowrap' }}>Gemini Enterprise — Licenças</Title>
             <Badge count={totalAssigned} showZero color="#722ed1" />
@@ -222,6 +187,7 @@ export default function GeminiPage({
                 users={users}
                 configs={configs}
                 onRemove={handleRemove}
+                diretorias={diretorias}
                 initialOpen={!!openInactivityReport}
                 initialThreshold={openInactivityReport?.thresholdMonths}
               />
@@ -234,18 +200,18 @@ export default function GeminiPage({
         </Space>
 
         {visibleConfigStats.length > 0 && (
-          <Row gutter={16} justify="center">
-            {visibleConfigStats.map((c, idx) => (
+          <Row gutter={16}>
+            {visibleConfigStats.map((c) => (
               <Col key={c.name} xs={24} sm={12} md={CARD_SPAN}>
                 <Card
                   size="small"
                   bordered
-                  className="stat-card"
-                  // Sem isso o card cai no raio padrão do antd (8px) —
+                  // Sem .stat-card: o hover dela (borda navy) sinaliza "isso é
+                  // clicável", e este card não é.
+                  // Sem o raio, o card cai no padrão do antd (8px) —
                   // Dashboard e Custos já usam 16px em todo card da mesma
                   // família visual.
                   style={{ borderRadius: 16 }}
-                  ref={idx === 0 ? firstCardRef : undefined}
                 >
                   <Statistic
                     title={<Tag color={tierColor(c.label)}>{c.label}</Tag>}
@@ -270,11 +236,7 @@ export default function GeminiPage({
         )}
 
         {diretoriaStats.length > 0 && (
-          <Row gutter={16} justify="center">
-            <Col xs={24} md={CARD_SPAN * 2}>
-              <DiretoriaStatsCard stats={diretoriaStats} unknownCount={diretoriaUnknown} />
-            </Col>
-          </Row>
+          <DiretoriaStatsCard stats={diretoriaStats} unknownCount={diretoriaUnknown} />
         )}
 
         <Divider style={{ margin: '8px 0' }} />

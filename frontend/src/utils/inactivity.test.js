@@ -131,12 +131,16 @@ describe('buildInactivityReportClipboard', () => {
       },
     ];
 
-    const { text } = buildInactivityReportClipboard(report, configs);
+    const { text } = buildInactivityReportClipboard(
+      report,
+      configs,
+      { 'luan.oliveira@oglobo.com.br': 'ESTRATÉGIA DIGITAL' },
+    );
     const lines = text.split('\n');
 
-    expect(lines[0]).toBe('Email\tLicença\tStatus\tAtribuída em\tÚltimo acesso\tTempo inativo');
+    expect(lines[0]).toBe('Email\tDiretoria\tLicença\tStatus\tAtribuída em\tÚltimo acesso\tTempo inativo');
     expect(lines[1]).toBe(
-      'luan.oliveira@oglobo.com.br\tGemini Enterprise Standard\tAtribuída\t01/10/2025\t01/10/2025\t9 meses'
+      'luan.oliveira@oglobo.com.br\tESTRATÉGIA DIGITAL\tGemini Enterprise Standard\tAtribuída\t01/10/2025\t01/10/2025\t9 meses'
     );
   });
 
@@ -160,12 +164,14 @@ describe('buildInactivityReportClipboard', () => {
       },
     ];
 
-    const { text, html } = buildInactivityReportClipboard(report, configs);
+    const { text, html } = buildInactivityReportClipboard(report, configs, { 'caio.rosa@oglobo.com.br': null });
     const lines = text.split('\n');
 
     expect(lines).toHaveLength(3);
+    // luan fora do mapa → "—" (desconhecido); caio null → Sem Diretoria
+    expect(lines[1].split('\t')[1]).toBe('—');
     expect(lines[2]).toBe(
-      'caio.rosa@oglobo.com.br\tGemini Enterprise Standard\tAtribuída\t08/06/2026\t—\t2 meses'
+      'caio.rosa@oglobo.com.br\tSem Diretoria\tGemini Enterprise Standard\tAtribuída\t08/06/2026\t—\t2 meses'
     );
 
     expect(html).toContain('<table');
@@ -173,5 +179,13 @@ describe('buildInactivityReportClipboard', () => {
     expect(html).toContain('Email');
     // 1 header row + 2 data rows
     expect((html.match(/<tr>/g) || []).length).toBe(3);
+  });
+
+  it('escreve "—" na Diretoria quando a busca de Diretorias falhou (mapa null)', () => {
+    const report = [{
+      userPrincipal: 'a@x.com', licenseConfig: 'configs/enterprise', licenseAssignmentState: 'ASSIGNED', monthsInactive: 3,
+    }];
+    const { text } = buildInactivityReportClipboard(report, configs);
+    expect(text.split('\n')[1].split('\t')[1]).toBe('—');
   });
 });

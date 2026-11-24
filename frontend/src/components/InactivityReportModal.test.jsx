@@ -167,4 +167,41 @@ describe('InactivityReportModal', () => {
 
     expect(screen.getByRole('button', { name: /copiar tabela/i })).toBeDisabled();
   });
+
+  it('mostra a coluna Diretoria, com Sem Diretoria e "—" para desconhecido', async () => {
+    const user = userEvent.setup();
+    const diretorias = {
+      'luan.oliveira@oglobo.com.br': 'ESTRATÉGIA DIGITAL',
+      'ana.souza@oglobo.com.br': null,
+    };
+    render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} diretorias={diretorias} />);
+    await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
+
+    expect(screen.getByRole('columnheader', { name: /diretoria/i })).toBeInTheDocument();
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(within(rows[0]).getByText('ESTRATÉGIA DIGITAL')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Sem Diretoria')).toBeInTheDocument();
+  });
+
+  it('inclui a Diretoria no "Copiar tabela"', async () => {
+    const user = userEvent.setup();
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: writeTextMock }, configurable: true });
+    delete window.ClipboardItem;
+
+    render(
+      <InactivityReportModal
+        users={users}
+        configs={configs}
+        onRemove={() => {}}
+        diretorias={{ 'luan.oliveira@oglobo.com.br': 'ESTRATÉGIA DIGITAL' }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
+    await user.click(screen.getByRole('button', { name: /copiar tabela/i }));
+
+    const [header, firstRow] = writeTextMock.mock.calls[0][0].split('\n');
+    expect(header.split('\t')[1]).toBe('Diretoria');
+    expect(firstRow.split('\t').slice(0, 2)).toEqual(['luan.oliveira@oglobo.com.br', 'ESTRATÉGIA DIGITAL']);
+  });
 });

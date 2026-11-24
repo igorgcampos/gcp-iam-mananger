@@ -25,6 +25,13 @@ export function getDiretoria(email, diretorias) {
   return Object.prototype.hasOwnProperty.call(diretorias, key) ? diretorias[key] : undefined;
 }
 
+// Diretoria como texto puro (relatórios copiados): desconhecido vira "—".
+export function diretoriaText(email, diretorias) {
+  const value = getDiretoria(email, diretorias);
+  if (value === undefined) return '—';
+  return value === null ? SEM_DIRETORIA : value;
+}
+
 export function userDiretoriaKey(email, diretorias) {
   const value = getDiretoria(email, diretorias);
   if (value === undefined) return undefined;
