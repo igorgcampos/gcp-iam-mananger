@@ -44,7 +44,7 @@ describe('CopyUsersReportButton', () => {
       }
     };
 
-    render(<CopyUsersReportButton users={users} configs={configs} />);
+    render(<CopyUsersReportButton users={users} configs={configs} diretorias={{ 'luan.oliveira@oglobo.com.br': 'ESTRATÉGIA DIGITAL' }} />);
     await user.click(screen.getByRole('button', { name: /copiar relatório de usuários/i }));
 
     expect(writeMock).toHaveBeenCalledTimes(1);
@@ -55,6 +55,7 @@ describe('CopyUsersReportButton', () => {
     ]);
     expect(text).toContain('luan.oliveira@oglobo.com.br');
     expect(text).toContain('ana.souza@oglobo.com.br');
+    expect(text).toContain('luan.oliveira@oglobo.com.br\tESTRATÉGIA DIGITAL');
     expect(html).toContain('<table');
 
     expect(await screen.findByText(/2 usuários copiados/i)).toBeInTheDocument();

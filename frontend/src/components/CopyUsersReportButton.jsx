@@ -4,11 +4,11 @@ import { CopyOutlined } from '@ant-design/icons';
 import { buildUsersReport, buildUsersReportClipboard } from '../utils/usersReport';
 import { copyTableToClipboard } from '../utils/clipboardTable';
 
-export default function CopyUsersReportButton({ users, configs }) {
+export default function CopyUsersReportButton({ users, configs, diretorias = null }) {
   const handleCopy = async () => {
     const report = buildUsersReport(users);
     try {
-      await copyTableToClipboard(buildUsersReportClipboard(report, configs));
+      await copyTableToClipboard(buildUsersReportClipboard(report, configs, diretorias));
       message.success(`${report.length} usuários copiados!`);
     } catch {
       message.error('Não foi possível copiar a tabela.');
