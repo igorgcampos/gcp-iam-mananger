@@ -27,7 +27,7 @@ const { Title, Text } = Typography;
 const CARD_SPAN = 8; // matches Col md={8} below
 
 export default function GeminiPage({
-  users, configs, loading, lastUpdated, reload, diretorias = null, antigravity = null, initialSearch = '', openInactivityReport = null,
+  users, configs, loading, lastUpdated, reload, diretorias = null, antigravity = null, antigravityFailed = false, initialSearch = '', openInactivityReport = null,
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -195,6 +195,7 @@ export default function GeminiPage({
                 onRemove={handleRemove}
                 diretorias={diretorias}
                 antigravity={antigravity}
+                antigravityFailed={antigravityFailed}
                 initialOpen={!!openInactivityReport}
                 initialThreshold={openInactivityReport?.thresholdMonths}
               />

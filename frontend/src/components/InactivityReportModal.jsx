@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert, Button, Modal, Segmented, Select, Table, Tag, Typography, Space, Popconfirm, message,
+  Alert, Button, Modal, Select, Table, Tag, Typography, Space, Popconfirm, message,
 } from 'antd';
 import { ClockCircleOutlined, CopyOutlined, DeleteOutlined, WarningOutlined } from '@ant-design/icons';
 import { renderLicenseTag, stateTag } from '../utils/licenseFormatting';
 import {
   DEFAULT_INACTIVITY_MONTHS,
   INACTIVITY_MONTH_OPTIONS,
-  INACTIVITY_SOURCES,
   buildInactivityReport,
   buildInactivityReportClipboard,
   formatDatePtBr,
@@ -22,10 +21,10 @@ import ColumnTitleWithInfo from './ColumnTitleWithInfo';
 const { Text } = Typography;
 
 export default function InactivityReportModal({
-  users, configs, onRemove, diretorias = null, antigravity = null, initialOpen = false, initialThreshold,
+  users, configs, onRemove, diretorias = null, antigravity = null, antigravityFailed = false,
+  initialOpen = false, initialThreshold,
 }) {
   const [open, setOpen] = useState(initialOpen);
-  const [source, setSource] = useState(INACTIVITY_SOURCES.GEMINI);
   const [thresholdMonths, setThresholdMonths] = useState(initialThreshold ?? DEFAULT_INACTIVITY_MONTHS);
 
   // GeminiPage agora fica sempre montada (só escondida via CSS ao trocar de
@@ -45,8 +44,8 @@ export default function InactivityReportModal({
   );
 
   const report = useMemo(
-    () => buildInactivityReport(users, thresholdMonths, new Date(), { source, antigravity }),
-    [users, thresholdMonths, source, antigravity]
+    () => buildInactivityReport(users, thresholdMonths, new Date(), { antigravity }),
+    [users, thresholdMonths, antigravity]
   );
 
   const handleCopy = async () => {
@@ -158,16 +157,6 @@ export default function InactivityReportModal({
               soltos numa fileira só, sem separação nenhuma. */}
           <Space style={{ justifyContent: 'space-between', width: '100%' }} wrap>
             <Space wrap>
-              {/* Mede a inatividade pelo Gemini Enterprise (Último acesso) ou
-                  pelo Antigravity (Último uso Antigravity). */}
-              <Segmented
-                value={source}
-                onChange={setSource}
-                options={[
-                  { label: 'Gemini Enterprise', value: INACTIVITY_SOURCES.GEMINI },
-                  { label: 'Antigravity', value: INACTIVITY_SOURCES.ANTIGRAVITY },
-                ]}
-              />
               <Text>Inativo há mais de</Text>
               <Select
                 value={thresholdMonths}
@@ -193,8 +182,15 @@ export default function InactivityReportModal({
               </Button>
             </Space>
           </Space>
-          {source === INACTIVITY_SOURCES.ANTIGRAVITY && !antigravity && (
-            <Alert type="warning" showIcon message="Dados de uso do Antigravity indisponíveis no momento." />
+          {/* Inativo é quem não usou nenhuma das duas ferramentas (ver Data de
+              Referência no CONTEXT.md); sem o dado do Antigravity ninguém é
+              listado, para não remover a licença de quem só usa o Antigravity. */}
+          {!antigravity && antigravityFailed && (
+            <Alert
+              type="warning"
+              showIcon
+              message="Dados de uso do Antigravity indisponíveis no momento. Sem eles, o relatório não lista ninguém."
+            />
           )}
           <Table
             dataSource={report}

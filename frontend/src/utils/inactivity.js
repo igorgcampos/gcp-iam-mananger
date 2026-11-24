@@ -7,27 +7,22 @@ export const DEFAULT_INACTIVITY_MONTHS = 2;
 
 export const INACTIVITY_MONTH_OPTIONS = [1, 2, 3, 6, 12];
 
-// Ferramenta pela qual a inatividade é medida (ver Data de Referência no
-// CONTEXT.md). Gemini Enterprise é o padrão.
-export const INACTIVITY_SOURCES = { GEMINI: 'gemini', ANTIGRAVITY: 'antigravity' };
-
-// Antigravity: o mais recente entre o último uso (ou, sem uso, o início do
-// rastreamento — antes dele não há dado, ninguém pode ser dado como inativo
-// por um período não observado) e a atribuição — uma licença reatribuída
-// na semana passada não está inativa há meses. Sem o dado do Antigravity,
-// null: o usuário fica fora do relatório em vez de virar falso inativo.
-function getAntigravityReferenceDate(user, antigravity) {
+// Data de Referência (ver CONTEXT.md): o uso mais recente em qualquer uma
+// das duas ferramentas da Licença do Gemini Enterprise — o "Último acesso"
+// (Gemini Enterprise/Agentspace) ou o "Último uso Antigravity" — ou a
+// atribuição, se for mais recente (licença reatribuída). Quem não aparece nos
+// logs do Antigravity conta só pelo Gemini: o início do rastreamento (since)
+// não entra, senão ninguém ficaria inativo no primeiro mês do sink.
+// Sem o dado do Antigravity, null: o usuário fica fora do relatório em vez
+// de virar falso inativo (quem só usa o Antigravity).
+export function getReferenceDate(user, antigravity) {
   if (!antigravity) return null;
   const use = getAntigravityUse(user.userPrincipal, antigravity);
-  const observed = use ? new Date(use.lastUse) : new Date(`${antigravity.since}T00:00:00`);
-  const created = user.createTime ? new Date(user.createTime) : null;
-  return created && created > observed ? created : observed;
-}
-
-export function getReferenceDate(user, source = INACTIVITY_SOURCES.GEMINI, antigravity = null) {
-  if (source === INACTIVITY_SOURCES.ANTIGRAVITY) return getAntigravityReferenceDate(user, antigravity);
-  const value = user.lastLoginTime || user.createTime;
-  return value ? new Date(value) : null;
+  const dates = [user.lastLoginTime, use?.lastUse, user.createTime]
+    .filter(Boolean)
+    .map((value) => new Date(value));
+  if (!dates.length) return null;
+  return new Date(Math.max(...dates.map((d) => d.getTime())));
 }
 
 // Reads calendar fields in local time, but the Discovery Engine API returns UTC
@@ -40,17 +35,17 @@ export function monthsBetween(pastDate, now) {
   return Math.max(total, 0);
 }
 
-export function isInactiveUser(user, thresholdMonths, now = new Date(), { source, antigravity } = {}) {
+export function isInactiveUser(user, thresholdMonths, now = new Date(), { antigravity } = {}) {
   if (user.licenseAssignmentState !== 'ASSIGNED') return false;
-  const referenceDate = getReferenceDate(user, source, antigravity);
+  const referenceDate = getReferenceDate(user, antigravity);
   if (!referenceDate) return false;
   return monthsBetween(referenceDate, now) >= thresholdMonths;
 }
 
-export function buildInactivityReport(users, thresholdMonths, now = new Date(), { source, antigravity } = {}) {
+export function buildInactivityReport(users, thresholdMonths, now = new Date(), { antigravity } = {}) {
   return users
-    .filter((user) => isInactiveUser(user, thresholdMonths, now, { source, antigravity }))
-    .map((user) => ({ ...user, monthsInactive: monthsBetween(getReferenceDate(user, source, antigravity), now) }))
+    .filter((user) => isInactiveUser(user, thresholdMonths, now, { antigravity }))
+    .map((user) => ({ ...user, monthsInactive: monthsBetween(getReferenceDate(user, antigravity), now) }))
     .sort((a, b) => b.monthsInactive - a.monthsInactive);
 }
 

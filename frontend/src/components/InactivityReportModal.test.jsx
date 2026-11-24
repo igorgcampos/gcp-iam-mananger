@@ -34,6 +34,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+// Ninguém nos logs do Antigravity: só o Gemini Enterprise conta.
+const semAntigravity = { since: '2026-11-24', usage: {} };
+
 const configs = [
   { name: 'configs/enterprise', subscriptionTier: 'SUBSCRIPTION_TIER_ENTERPRISE' },
 ];
@@ -73,14 +76,14 @@ const users = [
 
 describe('InactivityReportModal', () => {
   it('renders a trigger button and no modal content until clicked', () => {
-    render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} />);
+    render(<InactivityReportModal antigravity={semAntigravity} users={users} configs={configs} onRemove={() => {}} />);
     expect(screen.getByRole('button', { name: /relatório de inatividade/i })).toBeInTheDocument();
     expect(screen.queryByText('luan.oliveira@oglobo.com.br')).not.toBeInTheDocument();
   });
 
   it('shows only ASSIGNED users past the default 2-month threshold, most inactive first, with a summary count', async () => {
     const user = userEvent.setup();
-    render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} />);
+    render(<InactivityReportModal antigravity={semAntigravity} users={users} configs={configs} onRemove={() => {}} />);
 
     await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
 
@@ -94,7 +97,7 @@ describe('InactivityReportModal', () => {
 
   it('recomputes the list when the month threshold changes', async () => {
     const user = userEvent.setup();
-    render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} />);
+    render(<InactivityReportModal antigravity={semAntigravity} users={users} configs={configs} onRemove={() => {}} />);
     await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
 
     await user.click(screen.getByRole('combobox'));
@@ -107,7 +110,7 @@ describe('InactivityReportModal', () => {
   it('calls onRemove with the userPrincipal after confirming removal', async () => {
     const user = userEvent.setup();
     const onRemove = vi.fn();
-    render(<InactivityReportModal users={users} configs={configs} onRemove={onRemove} />);
+    render(<InactivityReportModal antigravity={semAntigravity} users={users} configs={configs} onRemove={onRemove} />);
     await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
 
     const rows = screen.getAllByRole('row').slice(1);
@@ -127,7 +130,7 @@ describe('InactivityReportModal', () => {
       }
     };
 
-    render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} />);
+    render(<InactivityReportModal antigravity={semAntigravity} users={users} configs={configs} onRemove={() => {}} />);
     await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
     await user.click(screen.getByRole('button', { name: /copiar tabela/i }));
 
@@ -149,7 +152,7 @@ describe('InactivityReportModal', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: writeTextMock }, configurable: true });
     delete window.ClipboardItem;
 
-    render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} />);
+    render(<InactivityReportModal antigravity={semAntigravity} users={users} configs={configs} onRemove={() => {}} />);
     await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
     await user.click(screen.getByRole('button', { name: /copiar tabela/i }));
 
@@ -159,7 +162,7 @@ describe('InactivityReportModal', () => {
 
   it('disables the copy button when there are no inactive users to report', async () => {
     const user = userEvent.setup();
-    render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} />);
+    render(<InactivityReportModal antigravity={semAntigravity} users={users} configs={configs} onRemove={() => {}} />);
     await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
 
     await user.click(screen.getByRole('combobox'));
@@ -174,7 +177,7 @@ describe('InactivityReportModal', () => {
       'luan.oliveira@oglobo.com.br': 'ESTRATÉGIA DIGITAL',
       'ana.souza@oglobo.com.br': null,
     };
-    render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} diretorias={diretorias} />);
+    render(<InactivityReportModal antigravity={semAntigravity} users={users} configs={configs} onRemove={() => {}} diretorias={diretorias} />);
     await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
 
     expect(screen.getByRole('columnheader', { name: /diretoria/i })).toBeInTheDocument();
@@ -191,6 +194,7 @@ describe('InactivityReportModal', () => {
 
     render(
       <InactivityReportModal
+        antigravity={semAntigravity}
         users={users}
         configs={configs}
         onRemove={() => {}}
@@ -205,7 +209,7 @@ describe('InactivityReportModal', () => {
     expect(firstRow.split('\t').slice(0, 2)).toEqual(['luan.oliveira@oglobo.com.br', 'ESTRATÉGIA DIGITAL']);
   });
 
-  describe('medindo pelo Antigravity', () => {
+  describe('com o Antigravity', () => {
     const antigravity = {
       since: '2026-11-24',
       usage: { 'luan.oliveira@oglobo.com.br': { lastUse: '2027-02-28T15:00:00.000Z', activeDays: 12 } },
@@ -215,29 +219,34 @@ describe('InactivityReportModal', () => {
       vi.setSystemTime(new Date('2027-03-01T12:00:00'));
     });
 
-    it('troca a medida para o último uso do Antigravity', async () => {
+    it('inativo é quem não usou nenhuma das duas ferramentas, sem seletor de ferramenta', async () => {
       const user = userEvent.setup();
       render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} antigravity={antigravity} />);
       await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
-      // Pelo Gemini Enterprise os três estão inativos há 2+ meses.
-      expect(screen.getByText(/3 de 3 usuários inativos/i)).toBeInTheDocument();
 
-      await user.click(screen.getByText('Antigravity'));
-
-      // luan usou ontem; caio e ana nunca usaram → contam desde 24/11/2026.
+      // luan não acessa o Gemini desde 2025, mas usou o Antigravity ontem.
       expect(screen.getByText(/2 de 3 usuários inativos/i)).toBeInTheDocument();
       expect(screen.queryByText('luan.oliveira@oglobo.com.br')).not.toBeInTheDocument();
       expect(screen.getAllByText('Sem uso desde 24/11/2026')).toHaveLength(2);
+      expect(screen.queryByRole('radio', { name: 'Antigravity' })).not.toBeInTheDocument();
     });
 
-    it('avisa quando o dado do Antigravity está indisponível', async () => {
+    it('carregando o Antigravity: não lista ninguém e não mostra aviso de falha', async () => {
       const user = userEvent.setup();
       render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} antigravity={null} />);
       await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
-      await user.click(screen.getByText('Antigravity'));
 
-      expect(screen.getByText('Dados de uso do Antigravity indisponíveis no momento.')).toBeInTheDocument();
       expect(screen.getByText(/0 de 3 usuários inativos/i)).toBeInTheDocument();
+      expect(screen.queryByText(/indisponíveis/i)).not.toBeInTheDocument();
+    });
+
+    it('falha no Antigravity: não lista ninguém e avisa o motivo', async () => {
+      const user = userEvent.setup();
+      render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} antigravity={null} antigravityFailed />);
+      await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
+
+      expect(screen.getByText(/0 de 3 usuários inativos/i)).toBeInTheDocument();
+      expect(screen.getByText(/Dados de uso do Antigravity indisponíveis/)).toBeInTheDocument();
     });
 
     it('inclui o Último uso Antigravity no "Copiar tabela"', async () => {

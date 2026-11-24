@@ -28,6 +28,15 @@ describe('useAntigravityData', () => {
 
     await waitFor(() => expect(console.warn).toHaveBeenCalled());
     expect(result.current.antigravity).toBeNull();
+    expect(result.current.failed).toBe(true);
+  });
+
+  test('carregando ou com sucesso, failed é false', async () => {
+    getAntigravityUsage.mockResolvedValue({ since: '2026-11-24', usage: {} });
+    const { result } = renderHook(() => useAntigravityData());
+    expect(result.current.failed).toBe(false);
+    await waitFor(() => expect(result.current.antigravity).not.toBeNull());
+    expect(result.current.failed).toBe(false);
   });
 
   test('depois de uma falha, tenta de novo quando refreshToken muda', async () => {

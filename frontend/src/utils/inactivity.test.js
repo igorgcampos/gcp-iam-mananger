@@ -8,8 +8,11 @@ import {
   buildInactivityReport,
   formatMonthsInactive,
   buildInactivityReportClipboard,
-  INACTIVITY_SOURCES,
 } from './inactivity';
+
+// Sem ninguém nos logs do Antigravity: só o Gemini Enterprise conta.
+const semAntigravity = { since: '2026-11-24', usage: {} };
+const opts = { antigravity: semAntigravity };
 
 describe('constants', () => {
   it('defaults to 2 months and offers 1/2/3/6/12 as options', () => {
@@ -21,16 +24,16 @@ describe('constants', () => {
 describe('getReferenceDate', () => {
   it('uses lastLoginTime when present', () => {
     const user = { lastLoginTime: '2025-10-01T00:00:00Z', createTime: '2025-01-01T00:00:00Z' };
-    expect(getReferenceDate(user)).toEqual(new Date('2025-10-01T00:00:00Z'));
+    expect(getReferenceDate(user, semAntigravity)).toEqual(new Date('2025-10-01T00:00:00Z'));
   });
 
   it('falls back to createTime when lastLoginTime is absent (never logged in)', () => {
     const user = { lastLoginTime: null, createTime: '2026-06-08T00:00:00Z' };
-    expect(getReferenceDate(user)).toEqual(new Date('2026-06-08T00:00:00Z'));
+    expect(getReferenceDate(user, semAntigravity)).toEqual(new Date('2026-06-08T00:00:00Z'));
   });
 
   it('returns null when neither date is present', () => {
-    expect(getReferenceDate({})).toBeNull();
+    expect(getReferenceDate({}, semAntigravity)).toBeNull();
   });
 });
 
@@ -56,7 +59,7 @@ describe('isInactiveUser', () => {
       createTime: '2025-10-01T00:00:00',
       lastLoginTime: '2025-10-01T00:00:00',
     };
-    expect(isInactiveUser(user, 2, now)).toBe(true);
+    expect(isInactiveUser(user, 2, now, opts)).toBe(true);
   });
 
   it('is false for an ASSIGNED user within the threshold', () => {
@@ -65,7 +68,7 @@ describe('isInactiveUser', () => {
       createTime: '2026-06-08T00:00:00',
       lastLoginTime: null,
     };
-    expect(isInactiveUser(user, 2, now)).toBe(false);
+    expect(isInactiveUser(user, 2, now, opts)).toBe(false);
   });
 
   it('is false regardless of dates when the license is not ASSIGNED', () => {
@@ -74,12 +77,12 @@ describe('isInactiveUser', () => {
       createTime: '2020-01-01T00:00:00',
       lastLoginTime: null,
     };
-    expect(isInactiveUser(user, 2, now)).toBe(false);
+    expect(isInactiveUser(user, 2, now, opts)).toBe(false);
   });
 
   it('is false when there is no reference date at all', () => {
     const user = { licenseAssignmentState: 'ASSIGNED', createTime: null, lastLoginTime: null };
-    expect(isInactiveUser(user, 2, now)).toBe(false);
+    expect(isInactiveUser(user, 2, now, opts)).toBe(false);
   });
 });
 
@@ -93,7 +96,7 @@ describe('buildInactivityReport', () => {
   ];
 
   it('excludes caio (only 1 month) and the non-ASSIGNED user, keeps and sorts the rest by months inactive descending', () => {
-    const report = buildInactivityReport(users, 2, now);
+    const report = buildInactivityReport(users, 2, now, opts);
     expect(report.map((u) => u.userPrincipal)).toEqual([
       'luan.oliveira@oglobo.com.br',
       'ana.souza@oglobo.com.br',
@@ -103,7 +106,7 @@ describe('buildInactivityReport', () => {
   });
 
   it('returns an empty array when nobody crosses the threshold', () => {
-    expect(buildInactivityReport(users, 12, now)).toEqual([]);
+    expect(buildInactivityReport(users, 12, now, opts)).toEqual([]);
   });
 });
 
@@ -191,7 +194,7 @@ describe('buildInactivityReportClipboard', () => {
   });
 });
 
-describe('inatividade medida pelo Antigravity', () => {
+describe('inatividade pelas duas ferramentas (Gemini Enterprise e Antigravity)', () => {
   const now = new Date('2027-03-01T12:00:00');
   const antigravity = {
     since: '2026-11-24',
@@ -200,46 +203,48 @@ describe('inatividade medida pelo Antigravity', () => {
       'usou.ontem@x.com': { lastUse: '2027-02-28T15:00:00.000Z', activeDays: 40 },
     },
   };
-  const assigned = (userPrincipal, createTime, lastLoginTime = '2027-02-28T00:00:00') => ({
+  const assigned = (userPrincipal, { createTime = '2025-01-01T00:00:00', lastLoginTime = null } = {}) => ({
     userPrincipal, licenseAssignmentState: 'ASSIGNED', createTime, lastLoginTime,
   });
-  const opts = { source: INACTIVITY_SOURCES.ANTIGRAVITY, antigravity };
+  const ag = { antigravity };
 
-  it('usa o último uso do Antigravity, não o último acesso ao Gemini', () => {
-    expect(isInactiveUser(assigned('usou.faz.tempo@x.com', '2025-01-01T00:00:00'), 2, now, opts)).toBe(true);
-    expect(isInactiveUser(assigned('usou.ontem@x.com', '2025-01-01T00:00:00'), 2, now, opts)).toBe(false);
+  it('usou só o Gemini Enterprise recentemente: ativo', () => {
+    const user = assigned('nunca@x.com', { lastLoginTime: '2027-02-20T00:00:00' });
+    expect(isInactiveUser(user, 1, now, ag)).toBe(false);
   });
 
-  it('sem uso e atribuído antes do início do rastreamento: conta a partir de 24/11/2026', () => {
-    const user = assigned('nunca@x.com', '2025-01-01T00:00:00');
-    expect(getReferenceDate(user, INACTIVITY_SOURCES.ANTIGRAVITY, antigravity)).toEqual(new Date('2026-11-24T00:00:00'));
+  it('usou só o Antigravity recentemente: ativo', () => {
+    const user = assigned('usou.ontem@x.com', { lastLoginTime: '2026-01-01T00:00:00' });
+    expect(isInactiveUser(user, 1, now, ag)).toBe(false);
+    expect(getReferenceDate(user, antigravity)).toEqual(new Date('2027-02-28T15:00:00.000Z'));
   });
 
-  it('sem uso e atribuído depois do início do rastreamento: conta a partir da atribuição', () => {
-    const user = assigned('nunca@x.com', '2027-01-10T00:00:00');
-    expect(getReferenceDate(user, INACTIVITY_SOURCES.ANTIGRAVITY, antigravity)).toEqual(new Date('2027-01-10T00:00:00'));
-    expect(isInactiveUser(user, 2, now, opts)).toBe(false);
+  it('não usou nenhuma das duas: conta a partir do uso mais recente entre elas', () => {
+    const user = assigned('usou.faz.tempo@x.com', { lastLoginTime: '2026-10-01T00:00:00' });
+    expect(getReferenceDate(user, antigravity)).toEqual(new Date('2026-11-25T15:00:00.000Z'));
+    expect(isInactiveUser(user, 3, now, ag)).toBe(true);
+  });
+
+  it('quem nunca usou o Antigravity conta pelo Gemini Enterprise, não pelo início do rastreamento', () => {
+    const user = assigned('nunca@x.com', { lastLoginTime: '2026-06-01T00:00:00' });
+    expect(getReferenceDate(user, antigravity)).toEqual(new Date('2026-06-01T00:00:00'));
+    expect(isInactiveUser(user, 6, now, ag)).toBe(true);
   });
 
   it('licença reatribuída depois do último uso: conta a partir da nova atribuição', () => {
-    const user = assigned('usou.faz.tempo@x.com', '2027-02-20T00:00:00');
-    expect(getReferenceDate(user, INACTIVITY_SOURCES.ANTIGRAVITY, antigravity)).toEqual(new Date('2027-02-20T00:00:00'));
-    expect(isInactiveUser(user, 1, now, opts)).toBe(false);
+    const user = assigned('usou.faz.tempo@x.com', { createTime: '2027-02-20T00:00:00', lastLoginTime: '2026-10-01T00:00:00' });
+    expect(getReferenceDate(user, antigravity)).toEqual(new Date('2027-02-20T00:00:00'));
+    expect(isInactiveUser(user, 1, now, ag)).toBe(false);
   });
 
   it('relatório vazio quando o dado do Antigravity está indisponível', () => {
-    const users = [assigned('usou.faz.tempo@x.com', '2025-01-01T00:00:00'), assigned('nunca@x.com', '2025-01-01T00:00:00')];
-    expect(buildInactivityReport(users, 1, now, { source: INACTIVITY_SOURCES.ANTIGRAVITY, antigravity: null })).toEqual([]);
-  });
-
-  it('o padrão continua sendo o Gemini Enterprise', () => {
-    const user = assigned('usou.ontem@x.com', '2025-01-01T00:00:00', '2026-06-01T00:00:00');
-    expect(isInactiveUser(user, 2, now)).toBe(true);
-    expect(isInactiveUser(user, 2, now, { antigravity })).toBe(true);
+    const users = [assigned('usou.faz.tempo@x.com'), assigned('nunca@x.com')];
+    expect(buildInactivityReport(users, 1, now, { antigravity: null })).toEqual([]);
+    expect(buildInactivityReport(users, 1, now)).toEqual([]);
   });
 
   it('o relatório copiado traz o último uso do Antigravity', () => {
-    const report = buildInactivityReport([assigned('usou.faz.tempo@x.com', '2025-01-01T00:00:00')], 2, now, opts);
+    const report = buildInactivityReport([assigned('usou.faz.tempo@x.com')], 2, now, ag);
     const { text } = buildInactivityReportClipboard(report, [], null, antigravity);
     const [header, row] = text.split('\n');
     expect(header.split('\t')[6]).toBe('Último uso Antigravity');

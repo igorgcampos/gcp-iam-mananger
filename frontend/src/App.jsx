@@ -382,6 +382,7 @@ export default function App() {
               geminiLoading={gemini.loading}
               geminiLastUpdated={gemini.lastUpdated}
               reloadGemini={gemini.reload}
+              antigravity={antigravity.antigravity}
               onNavigate={setSelected}
               onSearchNavigate={(term, page) => {
                 setPendingSearch(term);
@@ -411,6 +412,7 @@ export default function App() {
               reload={gemini.reload}
               diretorias={diretoria.diretorias}
               antigravity={antigravity.antigravity}
+              antigravityFailed={antigravity.failed}
               initialSearch={pendingSearch}
               openInactivityReport={pendingInactivityReport}
             />
