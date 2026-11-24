@@ -221,6 +221,12 @@ describe('inatividade medida pelo Antigravity', () => {
     expect(isInactiveUser(user, 2, now, opts)).toBe(false);
   });
 
+  it('licença reatribuída depois do último uso: conta a partir da nova atribuição', () => {
+    const user = assigned('usou.faz.tempo@x.com', '2027-02-20T00:00:00');
+    expect(getReferenceDate(user, INACTIVITY_SOURCES.ANTIGRAVITY, antigravity)).toEqual(new Date('2027-02-20T00:00:00'));
+    expect(isInactiveUser(user, 1, now, opts)).toBe(false);
+  });
+
   it('relatório vazio quando o dado do Antigravity está indisponível', () => {
     const users = [assigned('usou.faz.tempo@x.com', '2025-01-01T00:00:00'), assigned('nunca@x.com', '2025-01-01T00:00:00')];
     expect(buildInactivityReport(users, 1, now, { source: INACTIVITY_SOURCES.ANTIGRAVITY, antigravity: null })).toEqual([]);

@@ -76,10 +76,12 @@ describe('buildAntigravityColumn', () => {
     expect(screen.getAllByText('—')).toHaveLength(3);
   });
 
-  test('ordena por último uso, com quem não usou primeiro no ascendente', () => {
+  test('ordena por último uso, com quem não usou sempre no fim', () => {
     renderTable(antigravity);
     fireEvent.click(screen.getByText('Último uso Antigravity'));
-    expect(emailsInOrder()).toEqual(['nunca@x.com', 'usou@x.com', 'outro@x.com']);
+    expect(emailsInOrder()).toEqual(['usou@x.com', 'outro@x.com', 'nunca@x.com']);
+    fireEvent.click(screen.getByText('Último uso Antigravity'));
+    expect(emailsInOrder()).toEqual(['outro@x.com', 'usou@x.com', 'nunca@x.com']);
   });
 
   test('ordenar com o dado indisponível não quebra', () => {

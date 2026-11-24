@@ -56,6 +56,16 @@ async function getAntigravityUsage() {
     requestBody: { query: buildUsageQuery(dataset), useLegacySql: false, location: 'US' },
   });
 
+  // Sem isto, um job que passou do prazo do jobs.query (vem sem rows) ou um
+  // resultado paginado viraria "ninguém usou" — e ficaria 1h no cache,
+  // alimentando falsos inativos no relatório que remove licenças.
+  if (data.jobComplete === false) {
+    throw new Error('A consulta de uso do Antigravity não terminou a tempo no BigQuery');
+  }
+  if (data.pageToken) {
+    throw new Error('Resultado incompleto da consulta de uso do Antigravity (paginado)');
+  }
+
   const result = { since: TRACKING_SINCE, usage: parseUsageRows(data) };
   cache = { data: result, fetchedAt: Date.now() };
   return result;

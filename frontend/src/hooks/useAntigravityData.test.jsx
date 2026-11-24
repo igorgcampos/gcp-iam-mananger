@@ -30,6 +30,34 @@ describe('useAntigravityData', () => {
     expect(result.current.antigravity).toBeNull();
   });
 
+  test('depois de uma falha, tenta de novo quando refreshToken muda', async () => {
+    const body = { since: '2026-11-24', usage: {} };
+    getAntigravityUsage.mockRejectedValueOnce(new Error('timeout')).mockResolvedValue(body);
+
+    const { result, rerender } = renderHook(({ token }) => useAntigravityData({ refreshToken: token }), {
+      initialProps: { token: 1 },
+    });
+    await waitFor(() => expect(console.warn).toHaveBeenCalled());
+
+    rerender({ token: 2 });
+
+    await waitFor(() => expect(result.current.antigravity).toEqual(body));
+    expect(getAntigravityUsage).toHaveBeenCalledTimes(2);
+  });
+
+  test('com o dado em mãos, refreshToken não refaz a busca', async () => {
+    getAntigravityUsage.mockResolvedValue({ since: '2026-11-24', usage: {} });
+    const { result, rerender } = renderHook(({ token }) => useAntigravityData({ refreshToken: token }), {
+      initialProps: { token: 1 },
+    });
+    await waitFor(() => expect(result.current.antigravity).not.toBeNull());
+
+    rerender({ token: 2 });
+    await Promise.resolve();
+
+    expect(getAntigravityUsage).toHaveBeenCalledTimes(1);
+  });
+
   test('não busca enquanto desabilitado', async () => {
     renderHook(() => useAntigravityData({ enabled: false }));
     await Promise.resolve();

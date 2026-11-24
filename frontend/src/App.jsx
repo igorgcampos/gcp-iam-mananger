@@ -174,8 +174,12 @@ export default function App() {
     refreshToken: gemini.lastUpdated,
   });
   // Último uso Antigravity: independe da lista do Gemini (junção por e-mail
-  // na tela) e falha em silêncio — a coluna mostra "—".
-  const antigravity = useAntigravityData({ enabled: authState === 'authenticated' });
+  // na tela) e falha em silêncio — a coluna mostra "—". Usa o tick do Gemini
+  // só para tentar de novo depois de uma falha.
+  const antigravity = useAntigravityData({
+    enabled: authState === 'authenticated',
+    refreshToken: gemini.lastUpdated,
+  });
 
   useEffect(() => {
     localStorage.setItem(SIDER_COLLAPSED_KEY, collapsed ? '1' : '0');

@@ -11,17 +11,17 @@ export const INACTIVITY_MONTH_OPTIONS = [1, 2, 3, 6, 12];
 // CONTEXT.md). Gemini Enterprise é o padrão.
 export const INACTIVITY_SOURCES = { GEMINI: 'gemini', ANTIGRAVITY: 'antigravity' };
 
-// Antigravity: último uso; sem uso, o mais recente entre a atribuição e o
-// início do rastreamento (antes dele não há dado — ninguém pode ser dado como
-// inativo por um período que não foi observado). Sem o dado do Antigravity,
+// Antigravity: o mais recente entre o último uso (ou, sem uso, o início do
+// rastreamento — antes dele não há dado, ninguém pode ser dado como inativo
+// por um período não observado) e a atribuição — uma licença reatribuída
+// na semana passada não está inativa há meses. Sem o dado do Antigravity,
 // null: o usuário fica fora do relatório em vez de virar falso inativo.
 function getAntigravityReferenceDate(user, antigravity) {
   if (!antigravity) return null;
   const use = getAntigravityUse(user.userPrincipal, antigravity);
-  if (use) return new Date(use.lastUse);
-  const since = new Date(`${antigravity.since}T00:00:00`);
+  const observed = use ? new Date(use.lastUse) : new Date(`${antigravity.since}T00:00:00`);
   const created = user.createTime ? new Date(user.createTime) : null;
-  return created && created > since ? created : since;
+  return created && created > observed ? created : observed;
 }
 
 export function getReferenceDate(user, source = INACTIVITY_SOURCES.GEMINI, antigravity = null) {

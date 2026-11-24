@@ -9,7 +9,20 @@ const { Text } = Typography;
 
 function lastUseMs(email, antigravity) {
   const use = getAntigravityUse(email, antigravity);
-  return use ? new Date(use.lastUse).getTime() : 0;
+  return use ? new Date(use.lastUse).getTime() : null;
+}
+
+// Quem não usou (ou sem dado) fica sempre no fim, nas duas direções — assim
+// o primeiro clique mostra os usos reais mais antigos. O antd inverte o
+// resultado no descendente, por isso o sinal depende de sortOrder.
+function compareLastUse(a, b, sortOrder, antigravity) {
+  const x = lastUseMs(a.userPrincipal, antigravity);
+  const y = lastUseMs(b.userPrincipal, antigravity);
+  if (x === null && y === null) return 0;
+  const last = sortOrder === 'descend' ? -1 : 1;
+  if (x === null) return last;
+  if (y === null) return -last;
+  return x - y;
 }
 
 // Coluna "Último uso Antigravity" — usada na tela Gemini e no Relatório de
@@ -30,7 +43,7 @@ export function buildAntigravityColumn(antigravity) {
         </Tooltip>
       );
     },
-    sorter: (a, b) => lastUseMs(a.userPrincipal, antigravity) - lastUseMs(b.userPrincipal, antigravity),
+    sorter: (a, b, sortOrder) => compareLastUse(a, b, sortOrder, antigravity),
     filters: antigravity
       ? [{ text: 'Usou', value: 'usou' }, { text: 'Sem uso', value: 'sem-uso' }]
       : undefined,

@@ -107,6 +107,20 @@ describe('antigravityService', () => {
       nowSpy.mockRestore();
     });
 
+    test('job que não terminou no prazo é erro, não "ninguém usou", e não é cacheado', async () => {
+      queryMock.mockResolvedValueOnce({ data: { jobComplete: false } });
+      await expect(service.getAntigravityUsage()).rejects.toThrow(/não terminou/);
+
+      queryMock.mockResolvedValueOnce(mockUsageResult([]));
+      await expect(service.getAntigravityUsage()).resolves.toEqual({ since: '2026-11-24', usage: {} });
+      expect(queryMock).toHaveBeenCalledTimes(2);
+    });
+
+    test('resposta paginada (resultado incompleto) é erro', async () => {
+      queryMock.mockResolvedValueOnce({ data: { ...mockUsageResult([]).data, pageToken: 'abc' } });
+      await expect(service.getAntigravityUsage()).rejects.toThrow(/incompleto/);
+    });
+
     test('erro do BigQuery propaga e não é cacheado', async () => {
       queryMock.mockRejectedValueOnce(new Error('Not found: Dataset'));
       await expect(service.getAntigravityUsage()).rejects.toThrow('Not found: Dataset');
