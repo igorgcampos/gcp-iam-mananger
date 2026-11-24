@@ -8,7 +8,9 @@ const { getGraphAppToken } = require('./graphGroupCheck');
 
 const GRAPH_BATCH_URL = 'https://graph.microsoft.com/v1.0/$batch';
 const GRAPH_BATCH_SIZE = 20; // limite do $batch do Graph
-const DIRETORIA_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 horas
+// Diretoria muda raramente no AD: uma troca leva até 24h para aparecer no
+// painel, em troca de quase não consultar o Graph.
+const DIRETORIA_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 const SELECT = '$select=mail,onPremisesExtensionAttributes';
 
 // Cache em memória por instância — não é persistência: some num restart, e
@@ -30,7 +32,7 @@ function readCache(email, now) {
 // resultado e não é cacheado, para ser tentado de novo).
 // Com User.Read.All, um usuário sem valor vem como objeto de nulls; o objeto
 // inteiro null significa permissão ausente — também undefined, senão todo
-// mundo viraria "Sem Diretoria" (e ficaria assim no cache por 6h).
+// mundo viraria "Sem Diretoria" (e ficaria assim no cache por 24h).
 function resolveResponse(response) {
   if (response.status === 200) {
     const attributes = response.body?.onPremisesExtensionAttributes;

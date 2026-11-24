@@ -10,7 +10,7 @@ A validação em 24/11/2026, sobre os 100 Usuários com Licença: 100/100 encont
 - **AD com override manual no painel**: descartada para a v1 — resolve "o AD está errado", mas paga todo o custo de infraestrutura da opção acima. Pode virar incremento futuro se valores errados no AD se mostrarem frequentes na prática.
 - **Atributo customizado do Google Workspace (Admin SDK custom schema)**: descartada — exigiria domain-wide delegation e escopo `admin.directory.user` que a Service Account não tem (ver ADR 0007), além de alguém manter o valor lá.
 - **Atributo `department` do Entra**: descartado — na EdGlobo ele guarda um código numérico de centro de custo (ex.: `1142225000`), não o nome da Diretoria. `companyName` também é numérico.
-- **Enriquecer a resposta de `/api/gemini` com a Diretoria a cada carga**: descartada — acoplaria a tela de Licenças à disponibilidade e à latência do Graph (mesmo racional da ADR 0005 para não chamar o Graph a cada requisição). A Diretoria vem de um endpoint separado, carregado depois da tabela, com cache em memória por instância.
+- **Enriquecer a resposta de `/api/gemini` com a Diretoria a cada carga**: descartada — acoplaria a tela de Licenças à disponibilidade e à latência do Graph (mesmo racional da ADR 0005 para não chamar o Graph a cada requisição). A Diretoria vem de um endpoint separado, carregado depois da tabela, com cache em memória por instância por 24h — a Diretoria muda raramente, então uma troca no AD pode levar até um dia para aparecer no painel (o cache também zera quando a instância do Cloud Run é reciclada).
 
 ## Consequences
 

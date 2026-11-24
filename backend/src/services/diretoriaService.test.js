@@ -127,6 +127,10 @@ test('deduplica e-mails antes de consultar', async () => {
   expect(axios.post.mock.calls[0][1].requests).toHaveLength(1);
 });
 
+test('TTL do cache é de 24 horas — Diretoria muda raramente no AD', () => {
+  expect(DIRETORIA_CACHE_TTL_MS).toBe(24 * 60 * 60 * 1000);
+});
+
 test('usa o cache dentro do TTL e reconsulta depois', async () => {
   jest.useFakeTimers({ now: 0 });
   respondPerRequest(() => 'CBN');
