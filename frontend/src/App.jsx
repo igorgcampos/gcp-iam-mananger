@@ -17,6 +17,7 @@ import { useIamData } from './hooks/useIamData';
 import { useGeminiData } from './hooks/useGeminiData';
 import { useBillingData } from './hooks/useBillingData';
 import { useDiretoriaData } from './hooks/useDiretoriaData';
+import { useAntigravityData } from './hooks/useAntigravityData';
 // Versão otimizada (192×192, ~30KB) do arquivo original enviado — o badge é
 // exibido a 64px, então não faz sentido carregar o PNG de 1024px/1,4MB.
 import logo from './assets/logo-192.png';
@@ -172,6 +173,9 @@ export default function App() {
     enabled: authState === 'authenticated',
     refreshToken: gemini.lastUpdated,
   });
+  // Último uso Antigravity: independe da lista do Gemini (junção por e-mail
+  // na tela) e falha em silêncio — a coluna mostra "—".
+  const antigravity = useAntigravityData({ enabled: authState === 'authenticated' });
 
   useEffect(() => {
     localStorage.setItem(SIDER_COLLAPSED_KEY, collapsed ? '1' : '0');
@@ -402,6 +406,7 @@ export default function App() {
               lastUpdated={gemini.lastUpdated}
               reload={gemini.reload}
               diretorias={diretoria.diretorias}
+              antigravity={antigravity.antigravity}
               initialSearch={pendingSearch}
               openInactivityReport={pendingInactivityReport}
             />

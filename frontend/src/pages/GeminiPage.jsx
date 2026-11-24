@@ -18,13 +18,16 @@ import CopyUsersReportButton from '../components/CopyUsersReportButton';
 import DiretoriaStatsCard from '../components/DiretoriaStatsCard';
 import { buildDiretoriaStats, countUnknownAssigned } from '../utils/diretoria';
 import { buildDiretoriaColumn } from '../utils/diretoriaColumn';
+import { buildAntigravityColumn } from '../utils/antigravityColumn';
+import { GEMINI_LAST_ACCESS_INFO } from '../utils/antigravity';
+import ColumnTitleWithInfo from '../components/ColumnTitleWithInfo';
 
 const { Title, Text } = Typography;
 
 const CARD_SPAN = 8; // matches Col md={8} below
 
 export default function GeminiPage({
-  users, configs, loading, lastUpdated, reload, diretorias = null, initialSearch = '', openInactivityReport = null,
+  users, configs, loading, lastUpdated, reload, diretorias = null, antigravity = null, initialSearch = '', openInactivityReport = null,
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -56,6 +59,7 @@ export default function GeminiPage({
   const diretoriaStats = useMemo(() => buildDiretoriaStats(users, diretorias), [users, diretorias]);
   const diretoriaUnknown = useMemo(() => countUnknownAssigned(users, diretorias), [users, diretorias]);
   const diretoriaColumn = useMemo(() => buildDiretoriaColumn(users, diretorias), [users, diretorias]);
+  const antigravityColumn = useMemo(() => buildAntigravityColumn(antigravity), [antigravity]);
 
   const filteredUsers = useMemo(
     () => users.filter((u) => (u.userPrincipal || '').toLowerCase().includes(search.toLowerCase())),
@@ -126,12 +130,13 @@ export default function GeminiPage({
       sorter: (a, b) => new Date(a.createTime || 0) - new Date(b.createTime || 0),
     },
     {
-      title: 'Último acesso',
+      title: <ColumnTitleWithInfo title="Último acesso" info={GEMINI_LAST_ACCESS_INFO} />,
       dataIndex: 'lastLoginTime',
       key: 'lastLoginTime',
       render: (v) => v ? new Date(v).toLocaleDateString('pt-BR') : '—',
       sorter: (a, b) => new Date(a.lastLoginTime || 0) - new Date(b.lastLoginTime || 0),
     },
+    antigravityColumn,
     {
       title: 'Ações',
       key: 'actions',

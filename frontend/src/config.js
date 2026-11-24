@@ -10,3 +10,8 @@ export const BACKGROUND_POLL_INTERVAL_MS = 3 * 60 * 1000; // 3 minutos
 // ficar checando de poucos em poucos minutos geraria consultas sem nenhum
 // dado novo pra mostrar.
 export const BILLING_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 horas
+
+// Intervalo do Último uso Antigravity — o backend guarda a consulta ao
+// BigQuery por 1h (ver docs/adr/0015-uso-do-antigravity-via-sink-no-bigquery.md);
+// buscar antes disso só devolveria o mesmo cache.
+export const ANTIGRAVITY_POLL_INTERVAL_MS = 60 * 60 * 1000; // 1 hora
