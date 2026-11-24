@@ -20,7 +20,7 @@ import { buildDiretoriaStats, countUnknownAssigned } from '../utils/diretoria';
 import { buildDiretoriaColumn } from '../utils/diretoriaColumn';
 import { buildAntigravityColumn } from '../utils/antigravityColumn';
 import { GEMINI_LAST_ACCESS_INFO } from '../utils/antigravity';
-import ColumnTitleWithInfo from '../components/ColumnTitleWithInfo';
+import ColumnTitleWithInfo, { INFO_COLUMN_SORTER_TOOLTIP } from '../components/ColumnTitleWithInfo';
 
 const { Title, Text } = Typography;
 
@@ -135,6 +135,7 @@ export default function GeminiPage({
       key: 'lastLoginTime',
       render: (v) => v ? new Date(v).toLocaleDateString('pt-BR') : '—',
       sorter: (a, b) => new Date(a.lastLoginTime || 0) - new Date(b.lastLoginTime || 0),
+      ...INFO_COLUMN_SORTER_TOOLTIP,
     },
     antigravityColumn,
     {

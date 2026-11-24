@@ -59,6 +59,15 @@ describe('buildAntigravityColumn', () => {
     expect(await screen.findByText(ANTIGRAVITY_LAST_USE_INFO)).toBeInTheDocument();
   });
 
+  test('passar o mouse no título mostra só a explicação, sem o tooltip de ordenação junto', async () => {
+    renderTable(antigravity);
+
+    fireEvent.mouseEnter(screen.getByRole('img', { name: 'info-circle' }));
+    await screen.findByText(ANTIGRAVITY_LAST_USE_INFO);
+
+    expect(screen.queryByText(/sort/i)).not.toBeInTheDocument();
+  });
+
   test('mostra a data para quem usou e "Sem uso desde" para quem não usou', () => {
     renderTable(antigravity);
     expect(screen.getByText('25/11/2026')).toBeInTheDocument();

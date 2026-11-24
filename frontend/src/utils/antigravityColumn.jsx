@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tooltip, Typography } from 'antd';
-import ColumnTitleWithInfo from '../components/ColumnTitleWithInfo';
+import ColumnTitleWithInfo, { INFO_COLUMN_SORTER_TOOLTIP } from '../components/ColumnTitleWithInfo';
 import {
   ANTIGRAVITY_LAST_USE_INFO, formatSince, getAntigravityUse, semUsoText,
 } from './antigravity';
@@ -44,6 +44,7 @@ export function buildAntigravityColumn(antigravity) {
       );
     },
     sorter: (a, b, sortOrder) => compareLastUse(a, b, sortOrder, antigravity),
+    ...INFO_COLUMN_SORTER_TOOLTIP,
     filters: antigravity
       ? [{ text: 'Usou', value: 'usou' }, { text: 'Sem uso', value: 'sem-uso' }]
       : undefined,
