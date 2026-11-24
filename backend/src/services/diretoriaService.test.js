@@ -47,11 +47,11 @@ test('devolve extensionAttribute4 indexado pelo e-mail em minúsculas', async ()
   );
 });
 
-test('atributo vazio, só espaços ou ausente vira null', async () => {
+test('atributo vazio, só espaços ou null vira null', async () => {
   axios.post.mockResolvedValue(batch([
     ok('0', ''),
     ok('1', '   '),
-    { id: '2', status: 200, body: { onPremisesExtensionAttributes: null } },
+    ok('2', null),
     ok('3', '  TECNOLOGIA  '),
   ]));
 
@@ -61,6 +61,18 @@ test('atributo vazio, só espaços ou ausente vira null', async () => {
     'c@x.com': null,
     'd@x.com': 'TECNOLOGIA',
   });
+});
+
+// Com User.Read.All, usuário sem valor vem como objeto de nulls
+// ({ extensionAttribute4: null, ... }). O objeto inteiro null só acontece sem
+// a permissão — aí não dá para afirmar "Sem Diretoria" de ninguém.
+test('onPremisesExtensionAttributes null (sem User.Read.All) fica ausente e não cacheia', async () => {
+  axios.post.mockResolvedValue(batch([{ id: '0', status: 200, body: { onPremisesExtensionAttributes: null } }]));
+
+  await expect(getDiretorias(['a@x.com'])).resolves.toEqual({});
+  await getDiretorias(['a@x.com']);
+
+  expect(axios.post).toHaveBeenCalledTimes(2);
 });
 
 test('404 do Graph vira null (Sem Diretoria)', async () => {

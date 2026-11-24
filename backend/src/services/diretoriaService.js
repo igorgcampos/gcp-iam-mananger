@@ -28,9 +28,14 @@ function readCache(email, now) {
 // 200 → valor (vazio/espaços vira null); 404 → null (não está no Entra);
 // qualquer outro status → undefined (falha transitória: fica de fora do
 // resultado e não é cacheado, para ser tentado de novo).
+// Com User.Read.All, um usuário sem valor vem como objeto de nulls; o objeto
+// inteiro null significa permissão ausente — também undefined, senão todo
+// mundo viraria "Sem Diretoria" (e ficaria assim no cache por 6h).
 function resolveResponse(response) {
   if (response.status === 200) {
-    const raw = response.body?.onPremisesExtensionAttributes?.extensionAttribute4;
+    const attributes = response.body?.onPremisesExtensionAttributes;
+    if (!attributes) return undefined;
+    const raw = attributes.extensionAttribute4;
     return (typeof raw === 'string' && raw.trim()) || null;
   }
   if (response.status === 404) return null;

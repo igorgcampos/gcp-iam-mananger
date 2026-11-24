@@ -9,7 +9,7 @@ const { Text } = Typography;
 
 // Rateio por Diretoria (ver CONTEXT.md): licenças atribuídas agrupadas pela
 // Diretoria do AD. `stats` vem de buildDiretoriaStats (utils/diretoria.js).
-export default function DiretoriaStatsCard({ stats }) {
+export default function DiretoriaStatsCard({ stats, unknownCount = 0 }) {
   if (!stats.length) return null;
 
   return (
@@ -44,6 +44,11 @@ export default function DiretoriaStatsCard({ stats }) {
             </div>
           );
         })}
+        {unknownCount > 0 && (
+          <Text type="warning" style={{ fontSize: 12 }}>
+            {`${unknownCount} ${unknownCount === 1 ? 'usuário' : 'usuários'} sem informação do AD — percentuais parciais`}
+          </Text>
+        )}
       </Space>
     </Card>
   );

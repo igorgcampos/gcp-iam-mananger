@@ -65,6 +65,13 @@ export function buildDiretoriaStats(users, diretorias) {
     .sort((a, b) => semDiretoriaLast(a, b) || (b.count - a.count) || a.label.localeCompare(b.label));
 }
 
+// Usuários com licença atribuída cuja Diretoria é desconhecida (Graph falhou
+// para eles) — ficam fora dos percentuais do card, que precisa avisar disso.
+export function countUnknownAssigned(users, diretorias) {
+  return users.filter((u) => u.licenseAssignmentState === 'ASSIGNED'
+    && getDiretoria(u.userPrincipal, diretorias) === undefined).length;
+}
+
 export function buildDiretoriaFilters(users, diretorias) {
   if (!diretorias) return [];
   return groupUsers(users, diretorias)

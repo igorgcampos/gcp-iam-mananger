@@ -18,6 +18,7 @@ import CopyUsersReportButton from '../components/CopyUsersReportButton';
 import DiretoriaStatsCard from '../components/DiretoriaStatsCard';
 import {
   SEM_DIRETORIA, getDiretoria, userDiretoriaKey, buildDiretoriaStats, buildDiretoriaFilters,
+  countUnknownAssigned,
 } from '../utils/diretoria';
 
 const { Title, Text } = Typography;
@@ -58,6 +59,7 @@ export default function GeminiPage({
   // Rateio por Diretoria (ver CONTEXT.md) — vazio enquanto as Diretorias não
   // chegaram do AD ou se a busca falhou; aí o card simplesmente não aparece.
   const diretoriaStats = useMemo(() => buildDiretoriaStats(users, diretorias), [users, diretorias]);
+  const diretoriaUnknown = useMemo(() => countUnknownAssigned(users, diretorias), [users, diretorias]);
   const diretoriaFilters = useMemo(() => buildDiretoriaFilters(users, diretorias), [users, diretorias]);
 
   useLayoutEffect(() => {
@@ -270,7 +272,7 @@ export default function GeminiPage({
         {diretoriaStats.length > 0 && (
           <Row gutter={16} justify="center">
             <Col xs={24} md={CARD_SPAN * 2}>
-              <DiretoriaStatsCard stats={diretoriaStats} />
+              <DiretoriaStatsCard stats={diretoriaStats} unknownCount={diretoriaUnknown} />
             </Col>
           </Row>
         )}

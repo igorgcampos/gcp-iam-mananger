@@ -20,6 +20,16 @@ describe('DiretoriaStatsCard', () => {
     expect(screen.getByText('6 (6%)')).toBeInTheDocument();
   });
 
+  it('avisa que os percentuais são parciais quando há usuários sem informação do AD', () => {
+    render(<DiretoriaStatsCard stats={[{ key: 'CBN', label: 'CBN', count: 90, percent: 100 }]} unknownCount={10} />);
+    expect(screen.getByText('10 usuários sem informação do AD — percentuais parciais')).toBeInTheDocument();
+  });
+
+  it('não mostra aviso quando todos têm informação', () => {
+    render(<DiretoriaStatsCard stats={[{ key: 'CBN', label: 'CBN', count: 1, percent: 100 }]} unknownCount={0} />);
+    expect(screen.queryByText(/sem informação do AD/)).not.toBeInTheDocument();
+  });
+
   it('não renderiza nada com stats vazio', () => {
     const { container } = render(<DiretoriaStatsCard stats={[]} />);
     expect(container).toBeEmptyDOMElement();

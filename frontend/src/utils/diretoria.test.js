@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   SEM_DIRETORIA, SEM_DIRETORIA_KEY, diretoriaKey, getDiretoria, userDiretoriaKey,
-  buildDiretoriaStats, buildDiretoriaFilters,
+  buildDiretoriaStats, buildDiretoriaFilters, countUnknownAssigned,
 } from './diretoria';
 
 const assigned = (userPrincipal) => ({ userPrincipal, licenseAssignmentState: 'ASSIGNED' });
@@ -111,5 +111,17 @@ describe('buildDiretoriaFilters', () => {
 
   it('devolve [] quando o lookup falhou', () => {
     expect(buildDiretoriaFilters([assigned('a@x.com')], null)).toEqual([]);
+  });
+});
+
+describe('countUnknownAssigned', () => {
+  it('conta só usuários atribuídos fora do mapa (Sem Diretoria não conta)', () => {
+    const users = [
+      assigned('a@x.com'),
+      assigned('b@x.com'),
+      assigned('fora@x.com'),
+      { userPrincipal: 'nl@x.com', licenseAssignmentState: 'NO_LICENSE_ATTEMPTED_LOGIN' },
+    ];
+    expect(countUnknownAssigned(users, { 'a@x.com': 'CBN', 'b@x.com': null })).toBe(1);
   });
 });
