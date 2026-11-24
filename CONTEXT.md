@@ -52,6 +52,18 @@ _Avoid_: Remover usuário (ambíguo sobre o que exatamente é removido — a Lic
 Quem loga no painel e executa ações administrativas (adicionar/remover Usuário, conceder/revogar Papel Complementar, atribuir/remover Licença), autenticado via SSO (Entra ID) e autorizado por pertencer a um grupo específico do AD (ver [ADR 0005](docs/adr/0005-sso-entra-id-para-acesso-ao-painel.md)). Distinto de **Usuário**: o Operador é quem opera a ferramenta; o Usuário é quem é gerenciado por ela (via IAM/Licenças Gemini). Não há tiers entre Operadores — pertencer ao grupo já concede acesso total.
 _Avoid_: Admin (ambíguo com "Super Admin" do Workspace, que é outro papel, fora do escopo deste painel), usuário administrador
 
+**Diretoria**:
+A unidade organizacional a que um Usuário pertence (ex.: "ESTRATÉGIA DIGITAL"), lida do Entra ID (AD) — atributo `extensionAttribute4` do usuário. Como todo outro dado de Usuário no painel, é espelho de um sistema externo: o painel só exibe, nunca edita; um valor errado ou ausente se corrige no AD (ver [ADR 0014](docs/adr/0014-diretoria-lida-do-entra-id.md)). Grafias que diferem só em maiúsculas/acentos ("Audiencia" × "AUDIÊNCIA") são a mesma Diretoria; nomes diferentes ("AUDIÊNCIA ASSINATURAS" × "AUDIÊNCIA") são Diretorias diferentes. Existe para viabilizar o **Rateio por Diretoria**.
+_Avoid_: Departamento (no AD, `department` é um código numérico de centro de custo, não a Diretoria), Área
+
+**Sem Diretoria**:
+O grupo dos Usuários cujo `extensionAttribute4` está vazio no AD, ou que não foram encontrados no Entra pelo e-mail da Licença — hoje, tipicamente contas de terceiros (sufixos `.rpa`, `.ciee`, `.nscode`). Sempre exibido, nunca escondido, para que fique visível quem está fora do Rateio por Diretoria.
+_Avoid_: Outros, Não informado
+
+**Rateio por Diretoria**:
+A agregação do total de Licenças atribuídas, agrupada pela Diretoria de cada Usuário — usada para estimar quanto cada Diretoria da empresa deveria custear do gasto com Licenças Gemini. Fonte de dados é exclusivamente a Diretoria lida do AD. **Não tem relação** com o rateio por diretoria que já existe nas views internas de FinOps (`tbCustoTotal`, `vwResultadoMesAtual`, projeto `infra-bi-355620`, ver [ADR 0006](docs/adr/0006-billing-export-como-fonte-de-custos.md)) — granularidades e fontes diferentes (por Usuário aqui, por centro de custo/projeto lá), podem divergir sem que isso indique erro em nenhum dos dois.
+_Avoid_: Rateio (sozinho, sem qualificar "por Diretoria" ou "deste painel" quando o contexto puder confundir com o rateio de FinOps)
+
 ### Provisionamento de Identidade (Entra → Cloud Identity)
 
 **Identidade Sincronizada**:
