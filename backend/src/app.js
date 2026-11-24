@@ -4,6 +4,7 @@ const cookieParser = require('cookie-parser');
 const iamRoutes = require('./routes/iam');
 const geminiRoutes = require('./routes/gemini');
 const billingRoutes = require('./routes/billing');
+const diretoriaRoutes = require('./routes/diretoria');
 const authRoutes = require('./routes/auth');
 const requireAuth = require('./middleware/requireAuth');
 
@@ -26,6 +27,7 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/iam', requireAuth, iamRoutes);
 app.use('/api/gemini', requireAuth, geminiRoutes);
 app.use('/api/billing', requireAuth, billingRoutes);
+app.use('/api/diretoria', requireAuth, diretoriaRoutes);
 
 app.use((err, req, res, next) => {
   const status = err.status ?? err.response?.status ?? 500;
