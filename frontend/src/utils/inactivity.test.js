@@ -8,6 +8,7 @@ import {
   buildInactivityReport,
   formatMonthsInactive,
   buildInactivityReportClipboard,
+  INACTIVITY_SOURCES,
 } from './inactivity';
 
 describe('constants', () => {
@@ -138,9 +139,9 @@ describe('buildInactivityReportClipboard', () => {
     );
     const lines = text.split('\n');
 
-    expect(lines[0]).toBe('Email\tDiretoria\tLicença\tStatus\tAtribuída em\tÚltimo acesso\tTempo inativo');
+    expect(lines[0]).toBe('Email\tDiretoria\tLicença\tStatus\tAtribuída em\tÚltimo acesso\tÚltimo uso Antigravity\tTempo inativo');
     expect(lines[1]).toBe(
-      'luan.oliveira@oglobo.com.br\tESTRATÉGIA DIGITAL\tGemini Enterprise Standard\tAtribuída\t01/10/2025\t01/10/2025\t9 meses'
+      'luan.oliveira@oglobo.com.br\tESTRATÉGIA DIGITAL\tGemini Enterprise Standard\tAtribuída\t01/10/2025\t01/10/2025\t—\t9 meses'
     );
   });
 
@@ -171,7 +172,7 @@ describe('buildInactivityReportClipboard', () => {
     // luan fora do mapa → "—" (desconhecido); caio null → Sem Diretoria
     expect(lines[1].split('\t')[1]).toBe('—');
     expect(lines[2]).toBe(
-      'caio.rosa@oglobo.com.br\tSem Diretoria\tGemini Enterprise Standard\tAtribuída\t08/06/2026\t—\t2 meses'
+      'caio.rosa@oglobo.com.br\tSem Diretoria\tGemini Enterprise Standard\tAtribuída\t08/06/2026\t—\t—\t2 meses'
     );
 
     expect(html).toContain('<table');
@@ -187,5 +188,55 @@ describe('buildInactivityReportClipboard', () => {
     }];
     const { text } = buildInactivityReportClipboard(report, configs);
     expect(text.split('\n')[1].split('\t')[1]).toBe('—');
+  });
+});
+
+describe('inatividade medida pelo Antigravity', () => {
+  const now = new Date('2027-03-01T12:00:00');
+  const antigravity = {
+    since: '2026-11-24',
+    usage: {
+      'usou.faz.tempo@x.com': { lastUse: '2026-11-25T15:00:00.000Z', activeDays: 1 },
+      'usou.ontem@x.com': { lastUse: '2027-02-28T15:00:00.000Z', activeDays: 40 },
+    },
+  };
+  const assigned = (userPrincipal, createTime, lastLoginTime = '2027-02-28T00:00:00') => ({
+    userPrincipal, licenseAssignmentState: 'ASSIGNED', createTime, lastLoginTime,
+  });
+  const opts = { source: INACTIVITY_SOURCES.ANTIGRAVITY, antigravity };
+
+  it('usa o último uso do Antigravity, não o último acesso ao Gemini', () => {
+    expect(isInactiveUser(assigned('usou.faz.tempo@x.com', '2025-01-01T00:00:00'), 2, now, opts)).toBe(true);
+    expect(isInactiveUser(assigned('usou.ontem@x.com', '2025-01-01T00:00:00'), 2, now, opts)).toBe(false);
+  });
+
+  it('sem uso e atribuído antes do início do rastreamento: conta a partir de 24/11/2026', () => {
+    const user = assigned('nunca@x.com', '2025-01-01T00:00:00');
+    expect(getReferenceDate(user, INACTIVITY_SOURCES.ANTIGRAVITY, antigravity)).toEqual(new Date('2026-11-24T00:00:00'));
+  });
+
+  it('sem uso e atribuído depois do início do rastreamento: conta a partir da atribuição', () => {
+    const user = assigned('nunca@x.com', '2027-01-10T00:00:00');
+    expect(getReferenceDate(user, INACTIVITY_SOURCES.ANTIGRAVITY, antigravity)).toEqual(new Date('2027-01-10T00:00:00'));
+    expect(isInactiveUser(user, 2, now, opts)).toBe(false);
+  });
+
+  it('relatório vazio quando o dado do Antigravity está indisponível', () => {
+    const users = [assigned('usou.faz.tempo@x.com', '2025-01-01T00:00:00'), assigned('nunca@x.com', '2025-01-01T00:00:00')];
+    expect(buildInactivityReport(users, 1, now, { source: INACTIVITY_SOURCES.ANTIGRAVITY, antigravity: null })).toEqual([]);
+  });
+
+  it('o padrão continua sendo o Gemini Enterprise', () => {
+    const user = assigned('usou.ontem@x.com', '2025-01-01T00:00:00', '2026-06-01T00:00:00');
+    expect(isInactiveUser(user, 2, now)).toBe(true);
+    expect(isInactiveUser(user, 2, now, { antigravity })).toBe(true);
+  });
+
+  it('o relatório copiado traz o último uso do Antigravity', () => {
+    const report = buildInactivityReport([assigned('usou.faz.tempo@x.com', '2025-01-01T00:00:00')], 2, now, opts);
+    const { text } = buildInactivityReportClipboard(report, [], null, antigravity);
+    const [header, row] = text.split('\n');
+    expect(header.split('\t')[6]).toBe('Último uso Antigravity');
+    expect(row.split('\t')[6]).toBe('25/11/2026');
   });
 });

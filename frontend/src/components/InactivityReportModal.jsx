@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Modal, Select, Table, Tag, Typography, Space, Popconfirm, message } from 'antd';
+import {
+  Alert, Button, Modal, Segmented, Select, Table, Tag, Typography, Space, Popconfirm, message,
+} from 'antd';
 import { ClockCircleOutlined, CopyOutlined, DeleteOutlined, WarningOutlined } from '@ant-design/icons';
 import { renderLicenseTag, stateTag } from '../utils/licenseFormatting';
 import {
   DEFAULT_INACTIVITY_MONTHS,
   INACTIVITY_MONTH_OPTIONS,
+  INACTIVITY_SOURCES,
   buildInactivityReport,
   buildInactivityReportClipboard,
   formatDatePtBr,
@@ -12,13 +15,17 @@ import {
 } from '../utils/inactivity';
 import { copyTableToClipboard } from '../utils/clipboardTable';
 import { buildDiretoriaColumn } from '../utils/diretoriaColumn';
+import { buildAntigravityColumn } from '../utils/antigravityColumn';
+import { GEMINI_LAST_ACCESS_INFO } from '../utils/antigravity';
+import ColumnTitleWithInfo from './ColumnTitleWithInfo';
 
 const { Text } = Typography;
 
 export default function InactivityReportModal({
-  users, configs, onRemove, diretorias = null, initialOpen = false, initialThreshold,
+  users, configs, onRemove, diretorias = null, antigravity = null, initialOpen = false, initialThreshold,
 }) {
   const [open, setOpen] = useState(initialOpen);
+  const [source, setSource] = useState(INACTIVITY_SOURCES.GEMINI);
   const [thresholdMonths, setThresholdMonths] = useState(initialThreshold ?? DEFAULT_INACTIVITY_MONTHS);
 
   // GeminiPage agora fica sempre montada (só escondida via CSS ao trocar de
@@ -38,13 +45,13 @@ export default function InactivityReportModal({
   );
 
   const report = useMemo(
-    () => buildInactivityReport(users, thresholdMonths),
-    [users, thresholdMonths]
+    () => buildInactivityReport(users, thresholdMonths, new Date(), { source, antigravity }),
+    [users, thresholdMonths, source, antigravity]
   );
 
   const handleCopy = async () => {
     try {
-      await copyTableToClipboard(buildInactivityReportClipboard(report, configs, diretorias));
+      await copyTableToClipboard(buildInactivityReportClipboard(report, configs, diretorias, antigravity));
       message.success('Tabela copiada!');
     } catch {
       message.error('Não foi possível copiar a tabela.');
@@ -78,11 +85,12 @@ export default function InactivityReportModal({
       render: (v) => formatDatePtBr(v),
     },
     {
-      title: 'Último acesso',
+      title: <ColumnTitleWithInfo title="Último acesso" info={GEMINI_LAST_ACCESS_INFO} />,
       dataIndex: 'lastLoginTime',
       key: 'lastLoginTime',
       render: (v) => formatDatePtBr(v),
     },
+    buildAntigravityColumn(antigravity),
     {
       title: 'Tempo inativo',
       dataIndex: 'monthsInactive',
@@ -149,7 +157,17 @@ export default function InactivityReportModal({
               (secundários) agrupados à direita — antes os três ficavam
               soltos numa fileira só, sem separação nenhuma. */}
           <Space style={{ justifyContent: 'space-between', width: '100%' }} wrap>
-            <Space>
+            <Space wrap>
+              {/* Mede a inatividade pelo Gemini Enterprise (Último acesso) ou
+                  pelo Antigravity (Último uso Antigravity). */}
+              <Segmented
+                value={source}
+                onChange={setSource}
+                options={[
+                  { label: 'Gemini Enterprise', value: INACTIVITY_SOURCES.GEMINI },
+                  { label: 'Antigravity', value: INACTIVITY_SOURCES.ANTIGRAVITY },
+                ]}
+              />
               <Text>Inativo há mais de</Text>
               <Select
                 value={thresholdMonths}
@@ -175,6 +193,9 @@ export default function InactivityReportModal({
               </Button>
             </Space>
           </Space>
+          {source === INACTIVITY_SOURCES.ANTIGRAVITY && !antigravity && (
+            <Alert type="warning" showIcon message="Dados de uso do Antigravity indisponíveis no momento." />
+          )}
           <Table
             dataSource={report}
             columns={columns}

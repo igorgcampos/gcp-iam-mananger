@@ -204,4 +204,54 @@ describe('InactivityReportModal', () => {
     expect(header.split('\t')[1]).toBe('Diretoria');
     expect(firstRow.split('\t').slice(0, 2)).toEqual(['luan.oliveira@oglobo.com.br', 'ESTRATÉGIA DIGITAL']);
   });
+
+  describe('medindo pelo Antigravity', () => {
+    const antigravity = {
+      since: '2026-11-24',
+      usage: { 'luan.oliveira@oglobo.com.br': { lastUse: '2027-02-28T15:00:00.000Z', activeDays: 12 } },
+    };
+
+    beforeEach(() => {
+      vi.setSystemTime(new Date('2027-03-01T12:00:00'));
+    });
+
+    it('troca a medida para o último uso do Antigravity', async () => {
+      const user = userEvent.setup();
+      render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} antigravity={antigravity} />);
+      await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
+      // Pelo Gemini Enterprise os três estão inativos há 2+ meses.
+      expect(screen.getByText(/3 de 3 usuários inativos/i)).toBeInTheDocument();
+
+      await user.click(screen.getByText('Antigravity'));
+
+      // luan usou ontem; caio e ana nunca usaram → contam desde 24/11/2026.
+      expect(screen.getByText(/2 de 3 usuários inativos/i)).toBeInTheDocument();
+      expect(screen.queryByText('luan.oliveira@oglobo.com.br')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Sem uso desde 24/11/2026')).toHaveLength(2);
+    });
+
+    it('avisa quando o dado do Antigravity está indisponível', async () => {
+      const user = userEvent.setup();
+      render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} antigravity={null} />);
+      await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
+      await user.click(screen.getByText('Antigravity'));
+
+      expect(screen.getByText('Dados de uso do Antigravity indisponíveis no momento.')).toBeInTheDocument();
+      expect(screen.getByText(/0 de 3 usuários inativos/i)).toBeInTheDocument();
+    });
+
+    it('inclui o Último uso Antigravity no "Copiar tabela"', async () => {
+      const user = userEvent.setup();
+      const writeTextMock = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: writeTextMock }, configurable: true });
+      delete window.ClipboardItem;
+
+      render(<InactivityReportModal users={users} configs={configs} onRemove={() => {}} antigravity={antigravity} />);
+      await user.click(screen.getByRole('button', { name: /relatório de inatividade/i }));
+      await user.click(screen.getByRole('button', { name: /copiar tabela/i }));
+
+      const [header] = writeTextMock.mock.calls[0][0].split('\n');
+      expect(header.split('\t')).toContain('Último uso Antigravity');
+    });
+  });
 });

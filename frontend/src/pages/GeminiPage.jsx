@@ -193,10 +193,11 @@ export default function GeminiPage({
                 configs={configs}
                 onRemove={handleRemove}
                 diretorias={diretorias}
+                antigravity={antigravity}
                 initialOpen={!!openInactivityReport}
                 initialThreshold={openInactivityReport?.thresholdMonths}
               />
-              <CopyUsersReportButton users={users} configs={configs} diretorias={diretorias} />
+              <CopyUsersReportButton users={users} configs={configs} diretorias={diretorias} antigravity={antigravity} />
             </Space.Compact>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
               Adicionar usuário
