@@ -13,7 +13,7 @@ Decidimos **exportar esses logs com um sink do Cloud Logging (`ai-dev-tools-bq`,
 
 ## Consequences
 
-- O sink não faz backfill: só há dado a partir da criação dele, **24/11/2026 às 16:32 (horário de Brasília)**. Quem não aparece nos logs é exibido como "Sem uso desde 24/11/2026", nunca "Nunca usou". No relatório de inatividade por Antigravity, quem nunca usou conta a partir do mais recente entre a atribuição e essa data.
+- O sink não faz backfill: só há dado a partir da criação dele, **24/11/2026 às 16:32 (horário de Brasília)**. Quem não aparece nos logs é exibido como "Sem uso desde 24/11/2026", nunca "Nunca usou". No relatório de inatividade por Antigravity, a referência é a mais recente entre o último uso (ou, sem uso, essa data) e a atribuição, para que uma licença reatribuída não apareça como inativa há meses.
 - Permissões no **dataset**, não no projeto `infra-bi-355620`: o writer do sink (`service-789570275871@gcp-sa-logging.iam.gserviceaccount.com`) tem `BigQuery Data Editor`, e a SA da aplicação tem `BigQuery Data Viewer`. Um `dataEditor` no projeto daria escrita no Billing Export.
 - As partições não expiram: o volume é pequeno (metadados, uma linha por interação) e o histórico permite responder "quem usou nos últimos N meses".
 - Só entra o uso no projeto `agentspace-469418` com a conta corporativa. Uso com conta pessoal ou em outro projeto não aparece.

@@ -33,7 +33,7 @@ O estado atual de uma Atribuição. **Atribuída** significa que o usuário ocup
 _Avoid_: Assignment state, license state
 
 **Data de Referência**:
-A data usada para medir uso de uma Atribuição: o Último acesso do usuário, ou — quando ele nunca acessou a ferramenta — a própria data de Atribuição. É sempre "a última vez que sabemos que essa licença foi tocada". Pode ser medida por ferramenta: pelo Gemini Enterprise (padrão, Último acesso) ou pelo Antigravity (Último uso Antigravity; sem uso, a mais recente entre a Atribuição e o início do rastreamento).
+A data usada para medir uso de uma Atribuição: o Último acesso do usuário, ou — quando ele nunca acessou a ferramenta — a própria data de Atribuição. É sempre "a última vez que sabemos que essa licença foi tocada". Pode ser medida por ferramenta: pelo Gemini Enterprise (padrão, Último acesso) ou pelo Antigravity (a mais recente entre o Último uso Antigravity — ou, sem uso, o início do rastreamento — e a Atribuição).
 _Avoid_: Last activity, anchor date
 
 **Último acesso**:
