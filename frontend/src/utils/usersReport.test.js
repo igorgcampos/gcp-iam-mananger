@@ -41,12 +41,32 @@ describe('buildUsersReport', () => {
 describe('buildUsersReportClipboard', () => {
   it('renders the header row and one tab-separated row per user, without a "Tempo inativo" column', () => {
     const report = buildUsersReport(users);
-    const { text } = buildUsersReportClipboard(report, configs);
+    const { text } = buildUsersReportClipboard(report, configs, { 'ana.souza@oglobo.com.br': 'AUDIÊNCIA', 'luan.oliveira@oglobo.com.br': 'CBN' });
     const lines = text.split('\n');
 
-    expect(lines[0]).toBe('Email\tLicença\tStatus\tAtribuída em\tÚltimo acesso');
-    expect(lines[1]).toBe('ana.souza@oglobo.com.br\tGemini Enterprise Standard\tSem licença\t16/01/2026\t—');
-    expect(lines[2]).toBe('luan.oliveira@oglobo.com.br\tGemini Enterprise Standard\tAtribuída\t01/10/2025\t01/10/2025');
+    expect(lines[0]).toBe('Email\tDiretoria\tLicença\tStatus\tAtribuída em\tÚltimo acesso');
+    expect(lines[1]).toBe('ana.souza@oglobo.com.br\tAUDIÊNCIA\tGemini Enterprise Standard\tSem licença\t16/01/2026\t—');
+    expect(lines[2]).toBe('luan.oliveira@oglobo.com.br\tCBN\tGemini Enterprise Standard\tAtribuída\t01/10/2025\t01/10/2025');
+  });
+
+  it('acha a Diretoria mesmo com e-mail em maiúsculas vindo do Gemini', () => {
+    const report = [{ ...users[1], userPrincipal: 'Ana.Souza@oglobo.com.br' }];
+    const { text } = buildUsersReportClipboard(report, configs, { 'ana.souza@oglobo.com.br': 'AUDIÊNCIA' });
+    expect(text.split('\n')[1].split('\t')[1]).toBe('AUDIÊNCIA');
+  });
+
+  it('escreve "Sem Diretoria" para null e "—" para desconhecido', () => {
+    const report = buildUsersReport(users);
+    const { text } = buildUsersReportClipboard(report, configs, { 'ana.souza@oglobo.com.br': null });
+    const cells = text.split('\n').slice(1).map((l) => l.split('\t')[1]);
+    expect(cells).toEqual(['Sem Diretoria', '—']);
+  });
+
+  it('escreve "—" em todas as linhas quando a busca de Diretorias falhou', () => {
+    const report = buildUsersReport(users);
+    const { text } = buildUsersReportClipboard(report, configs, null);
+    const cells = text.split('\n').slice(1).map((l) => l.split('\t')[1]);
+    expect(cells).toEqual(['—', '—']);
   });
 
   it('renders a matching HTML table', () => {

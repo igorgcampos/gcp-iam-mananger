@@ -1,5 +1,6 @@
 import { resolveTierName, stateLabel } from './licenseFormatting.jsx';
 import { buildClipboardTable } from './clipboardTable';
+import { diretoriaText } from './diretoria';
 
 export const DEFAULT_INACTIVITY_MONTHS = 2;
 
@@ -42,11 +43,12 @@ export function formatDatePtBr(value) {
   return value ? new Date(value).toLocaleDateString('pt-BR') : '—';
 }
 
-const CLIPBOARD_HEADERS = ['Email', 'Licença', 'Status', 'Atribuída em', 'Último acesso', 'Tempo inativo'];
+const CLIPBOARD_HEADERS = ['Email', 'Diretoria', 'Licença', 'Status', 'Atribuída em', 'Último acesso', 'Tempo inativo'];
 
-export function buildInactivityReportClipboard(report, configs) {
+export function buildInactivityReportClipboard(report, configs, diretorias = null) {
   const rows = report.map((u) => [
     u.userPrincipal,
+    diretoriaText(u.userPrincipal, diretorias),
     resolveTierName(u.licenseConfig, configs) || '—',
     stateLabel(u.licenseAssignmentState),
     formatDatePtBr(u.createTime),

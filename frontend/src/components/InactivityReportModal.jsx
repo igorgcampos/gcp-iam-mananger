@@ -11,11 +11,12 @@ import {
   formatMonthsInactive,
 } from '../utils/inactivity';
 import { copyTableToClipboard } from '../utils/clipboardTable';
+import { buildDiretoriaColumn } from '../utils/diretoriaColumn';
 
 const { Text } = Typography;
 
 export default function InactivityReportModal({
-  users, configs, onRemove, initialOpen = false, initialThreshold,
+  users, configs, onRemove, diretorias = null, initialOpen = false, initialThreshold,
 }) {
   const [open, setOpen] = useState(initialOpen);
   const [thresholdMonths, setThresholdMonths] = useState(initialThreshold ?? DEFAULT_INACTIVITY_MONTHS);
@@ -43,7 +44,7 @@ export default function InactivityReportModal({
 
   const handleCopy = async () => {
     try {
-      await copyTableToClipboard(buildInactivityReportClipboard(report, configs));
+      await copyTableToClipboard(buildInactivityReportClipboard(report, configs, diretorias));
       message.success('Tabela copiada!');
     } catch {
       message.error('Não foi possível copiar a tabela.');
@@ -57,6 +58,7 @@ export default function InactivityReportModal({
       key: 'userPrincipal',
       render: (v) => <Text strong>{v}</Text>,
     },
+    buildDiretoriaColumn(report, diretorias),
     {
       title: 'Licença',
       dataIndex: 'licenseConfig',
