@@ -6,6 +6,7 @@ jest.mock('../middleware/requireAuth', () => (req, res, next) => {
 jest.mock('../services/billingService', () => ({
   getBillingSummary: jest.fn(),
 }));
+jest.mock('../services/antigravityService', () => ({ getAntigravityUsage: jest.fn() }));
 
 // As mesmas rotas já existentes precisam continuar "carregáveis" pelo app.js
 // completo — reaproveita os mocks já usados por gemini.test.js/iam.test.js

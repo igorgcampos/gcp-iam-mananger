@@ -44,9 +44,9 @@ describe('buildUsersReportClipboard', () => {
     const { text } = buildUsersReportClipboard(report, configs, { 'ana.souza@oglobo.com.br': 'AUDIÊNCIA', 'luan.oliveira@oglobo.com.br': 'CBN' });
     const lines = text.split('\n');
 
-    expect(lines[0]).toBe('Email\tDiretoria\tLicença\tStatus\tAtribuída em\tÚltimo acesso');
-    expect(lines[1]).toBe('ana.souza@oglobo.com.br\tAUDIÊNCIA\tGemini Enterprise Standard\tSem licença\t16/01/2026\t—');
-    expect(lines[2]).toBe('luan.oliveira@oglobo.com.br\tCBN\tGemini Enterprise Standard\tAtribuída\t01/10/2025\t01/10/2025');
+    expect(lines[0]).toBe('Email\tDiretoria\tLicença\tStatus\tAtribuída em\tÚltimo acesso\tÚltimo uso Antigravity');
+    expect(lines[1]).toBe('ana.souza@oglobo.com.br\tAUDIÊNCIA\tGemini Enterprise Standard\tSem licença\t16/01/2026\t—\t—');
+    expect(lines[2]).toBe('luan.oliveira@oglobo.com.br\tCBN\tGemini Enterprise Standard\tAtribuída\t01/10/2025\t01/10/2025\t—');
   });
 
   it('acha a Diretoria mesmo com e-mail em maiúsculas vindo do Gemini', () => {
@@ -78,5 +78,13 @@ describe('buildUsersReportClipboard', () => {
     expect(html).toContain('Email');
     // 1 header row + 2 data rows
     expect((html.match(/<tr>/g) || []).length).toBe(3);
+  });
+
+  it('traz o Último uso Antigravity, com "Sem uso desde" para quem não usou', () => {
+    const report = buildUsersReport(users);
+    const antigravity = { since: '2026-11-24', usage: { 'luan.oliveira@oglobo.com.br': { lastUse: '2026-11-25T15:00:00.000Z', activeDays: 1 } } };
+    const { text } = buildUsersReportClipboard(report, configs, null, antigravity);
+    const cells = text.split('\n').slice(1).map((l) => l.split('\t')[6]);
+    expect(cells).toEqual(['Sem uso desde 24/11/2026', '25/11/2026']);
   });
 });

@@ -17,6 +17,7 @@ import { useIamData } from './hooks/useIamData';
 import { useGeminiData } from './hooks/useGeminiData';
 import { useBillingData } from './hooks/useBillingData';
 import { useDiretoriaData } from './hooks/useDiretoriaData';
+import { useAntigravityData } from './hooks/useAntigravityData';
 // Versão otimizada (192×192, ~30KB) do arquivo original enviado — o badge é
 // exibido a 64px, então não faz sentido carregar o PNG de 1024px/1,4MB.
 import logo from './assets/logo-192.png';
@@ -169,6 +170,13 @@ export default function App() {
   // Depende da lista do Gemini: busca as Diretorias no AD depois dela, e
   // retenta a cada tick do polling do Gemini se a última busca falhou.
   const diretoria = useDiretoriaData(gemini.users, {
+    enabled: authState === 'authenticated',
+    refreshToken: gemini.lastUpdated,
+  });
+  // Último uso Antigravity: independe da lista do Gemini (junção por e-mail
+  // na tela) e falha em silêncio — a coluna mostra "—". Usa o tick do Gemini
+  // só para tentar de novo depois de uma falha.
+  const antigravity = useAntigravityData({
     enabled: authState === 'authenticated',
     refreshToken: gemini.lastUpdated,
   });
@@ -374,6 +382,7 @@ export default function App() {
               geminiLoading={gemini.loading}
               geminiLastUpdated={gemini.lastUpdated}
               reloadGemini={gemini.reload}
+              antigravity={antigravity.antigravity}
               onNavigate={setSelected}
               onSearchNavigate={(term, page) => {
                 setPendingSearch(term);
@@ -402,6 +411,8 @@ export default function App() {
               lastUpdated={gemini.lastUpdated}
               reload={gemini.reload}
               diretorias={diretoria.diretorias}
+              antigravity={antigravity.antigravity}
+              antigravityFailed={antigravity.failed}
               initialSearch={pendingSearch}
               openInactivityReport={pendingInactivityReport}
             />

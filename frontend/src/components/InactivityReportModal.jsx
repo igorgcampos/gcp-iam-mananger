@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Modal, Select, Table, Tag, Typography, Space, Popconfirm, message } from 'antd';
+import {
+  Alert, Button, Modal, Select, Table, Tag, Typography, Space, Popconfirm, message,
+} from 'antd';
 import { ClockCircleOutlined, CopyOutlined, DeleteOutlined, WarningOutlined } from '@ant-design/icons';
 import { renderLicenseTag, stateTag } from '../utils/licenseFormatting';
 import {
@@ -12,11 +14,15 @@ import {
 } from '../utils/inactivity';
 import { copyTableToClipboard } from '../utils/clipboardTable';
 import { buildDiretoriaColumn } from '../utils/diretoriaColumn';
+import { buildAntigravityColumn } from '../utils/antigravityColumn';
+import { GEMINI_LAST_ACCESS_INFO } from '../utils/antigravity';
+import ColumnTitleWithInfo from './ColumnTitleWithInfo';
 
 const { Text } = Typography;
 
 export default function InactivityReportModal({
-  users, configs, onRemove, diretorias = null, initialOpen = false, initialThreshold,
+  users, configs, onRemove, diretorias = null, antigravity = null, antigravityFailed = false,
+  initialOpen = false, initialThreshold,
 }) {
   const [open, setOpen] = useState(initialOpen);
   const [thresholdMonths, setThresholdMonths] = useState(initialThreshold ?? DEFAULT_INACTIVITY_MONTHS);
@@ -38,13 +44,13 @@ export default function InactivityReportModal({
   );
 
   const report = useMemo(
-    () => buildInactivityReport(users, thresholdMonths),
-    [users, thresholdMonths]
+    () => buildInactivityReport(users, thresholdMonths, new Date(), { antigravity }),
+    [users, thresholdMonths, antigravity]
   );
 
   const handleCopy = async () => {
     try {
-      await copyTableToClipboard(buildInactivityReportClipboard(report, configs, diretorias));
+      await copyTableToClipboard(buildInactivityReportClipboard(report, configs, diretorias, antigravity));
       message.success('Tabela copiada!');
     } catch {
       message.error('Não foi possível copiar a tabela.');
@@ -78,11 +84,12 @@ export default function InactivityReportModal({
       render: (v) => formatDatePtBr(v),
     },
     {
-      title: 'Último acesso',
+      title: <ColumnTitleWithInfo title="Último acesso" info={GEMINI_LAST_ACCESS_INFO} />,
       dataIndex: 'lastLoginTime',
       key: 'lastLoginTime',
       render: (v) => formatDatePtBr(v),
     },
+    buildAntigravityColumn(antigravity),
     {
       title: 'Tempo inativo',
       dataIndex: 'monthsInactive',
@@ -149,7 +156,7 @@ export default function InactivityReportModal({
               (secundários) agrupados à direita — antes os três ficavam
               soltos numa fileira só, sem separação nenhuma. */}
           <Space style={{ justifyContent: 'space-between', width: '100%' }} wrap>
-            <Space>
+            <Space wrap>
               <Text>Inativo há mais de</Text>
               <Select
                 value={thresholdMonths}
@@ -175,6 +182,16 @@ export default function InactivityReportModal({
               </Button>
             </Space>
           </Space>
+          {/* Inativo é quem não usou nenhuma das duas ferramentas (ver Data de
+              Referência no CONTEXT.md); sem o dado do Antigravity ninguém é
+              listado, para não remover a licença de quem só usa o Antigravity. */}
+          {!antigravity && antigravityFailed && (
+            <Alert
+              type="warning"
+              showIcon
+              message="Dados de uso do Antigravity indisponíveis no momento. Sem eles, o relatório não lista ninguém."
+            />
+          )}
           <Table
             dataSource={report}
             columns={columns}

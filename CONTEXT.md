@@ -33,8 +33,16 @@ O estado atual de uma Atribuição. **Atribuída** significa que o usuário ocup
 _Avoid_: Assignment state, license state
 
 **Data de Referência**:
-A data usada para medir uso de uma Atribuição: o Último acesso do usuário, ou — quando ele nunca acessou a ferramenta — a própria data de Atribuição. É sempre "a última vez que sabemos que essa licença foi tocada".
+A data usada para medir uso de uma Atribuição: a mais recente entre o Último acesso (Gemini Enterprise), o Último uso Antigravity e a própria data de Atribuição. É sempre "a última vez que sabemos que essa licença foi tocada" — a Licença do Gemini Enterprise dá acesso às duas ferramentas, então usar qualquer uma delas conta. A data de Atribuição entra para que uma licença reatribuída não pareça inativa há meses. O início do rastreamento do Antigravity (24/11/2026) não entra: quem nunca usou o Antigravity é medido só pelo Gemini Enterprise.
 _Avoid_: Last activity, anchor date
+
+**Último acesso**:
+A última vez que o usuário usou o Gemini Enterprise (Agentspace), como informado pela própria plataforma.
+_Avoid_: Último uso (sem qualificar a ferramenta)
+
+**Último uso Antigravity**:
+A última vez que o usuário usou o Antigravity — pela IDE ou pela extensão do VS Code, que não se distinguem — no projeto `agentspace-469418` com a conta corporativa. Só existe a partir do início do rastreamento (24/11/2026); quem não usou desde então está "Sem uso desde 24/11/2026", não "nunca usou". Ver [ADR 0015](docs/adr/0015-uso-do-antigravity-via-sink-no-bigquery.md).
+_Avoid_: Último acesso ao Antigravity, uso do Code Assist
 
 **Usuário Inativo**:
 Um usuário com Atribuição em Status "Atribuída" cuja Data de Referência está mais distante do que o Limite de Inatividade escolhido. Representa uma Licença possivelmente ociosa, candidata a ser liberada para outra pessoa.

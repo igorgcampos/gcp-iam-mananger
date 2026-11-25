@@ -57,7 +57,7 @@ const DASHBOARD_INACTIVITY_MONTHS = 3;
 export default function DashboardPage({
   iamUsers, iamLoading, iamLastUpdated, reloadIam,
   geminiUsers, configs, geminiLoading, geminiLastUpdated, reloadGemini,
-  onNavigate, onSearchNavigate, onOpenInactivityReport,
+  antigravity = null, onNavigate, onSearchNavigate, onOpenInactivityReport,
 }) {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -122,9 +122,12 @@ export default function DashboardPage({
   const hasExpired = expiringSoon.some((c) => c.daysUntilEnd < 0);
 
   const inactiveReport = useMemo(
-    () => buildInactivityReport(geminiUsers, DASHBOARD_INACTIVITY_MONTHS),
-    [geminiUsers]
+    () => buildInactivityReport(geminiUsers, DASHBOARD_INACTIVITY_MONTHS, new Date(), { antigravity }),
+    [geminiUsers, antigravity]
   );
+  // Sem o dado do Antigravity a contagem não é confiável (seria 0): "—".
+  const inactiveCount = antigravity ? inactiveReport.length : null;
+  const hasInactive = inactiveCount > 0;
 
   const handleOpenInactivityReport = () => {
     if (onOpenInactivityReport) {
@@ -287,13 +290,13 @@ export default function DashboardPage({
               />
               <StatCard
                 icon={<ClockCircleOutlined />}
-                iconBg={inactiveReport.length > 0 ? '#fef2f2' : '#f0fdf4'}
-                iconColor={inactiveReport.length > 0 ? '#dc2626' : '#16a34a'}
+                iconBg={inactiveCount === null ? '#f1f5f9' : (hasInactive ? '#fef2f2' : '#f0fdf4')}
+                iconColor={inactiveCount === null ? '#94a3b8' : (hasInactive ? '#dc2626' : '#16a34a')}
                 label="Usuários inativos"
-                value={inactiveReport.length}
+                value={inactiveCount ?? '—'}
                 hint={`≥ ${DASHBOARD_INACTIVITY_MONTHS} meses sem uso`}
-                hintColor={inactiveReport.length > 0 ? '#dc2626' : '#94a3b8'}
-                valueColor={inactiveReport.length > 0 ? '#dc2626' : undefined}
+                hintColor={hasInactive ? '#dc2626' : '#94a3b8'}
+                valueColor={hasInactive ? '#dc2626' : undefined}
                 onClick={handleOpenInactivityReport}
               />
             </div>

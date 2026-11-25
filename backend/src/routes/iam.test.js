@@ -19,6 +19,7 @@ jest.mock('../services/geminiService', () => ({
 }));
 
 jest.mock('../services/billingService', () => ({ getBillingSummary: jest.fn() }));
+jest.mock('../services/antigravityService', () => ({ getAntigravityUsage: jest.fn() }));
 
 jest.mock('../services/gcpAuth', () => ({ auth: {}, getAccessToken: jest.fn() }));
 
