@@ -59,6 +59,16 @@ describe('buildAntigravityColumn', () => {
     expect(await screen.findByText(ANTIGRAVITY_LAST_USE_INFO)).toBeInTheDocument();
   });
 
+  test('clicar no ícone ⓘ não muda a ordenação da coluna', () => {
+    renderTable(antigravity);
+    const before = emailsInOrder();
+
+    fireEvent.click(screen.getByRole('img', { name: 'info-circle' }));
+
+    expect(emailsInOrder()).toEqual(before);
+    expect(screen.getByRole('columnheader', { name: /último uso antigravity/i })).not.toHaveAttribute('aria-sort');
+  });
+
   test('passar o mouse no título mostra só a explicação, sem o tooltip de ordenação junto', async () => {
     renderTable(antigravity);
 

@@ -15,7 +15,9 @@ export default function ColumnTitleWithInfo({ title, info }) {
     <Space size={4}>
       {title}
       <Tooltip title={info}>
-        <InfoCircleOutlined style={{ color: '#94a3b8' }} />
+        {/* O clique no ícone é só para ler a explicação: sem parar a
+            propagação, ele chega ao cabeçalho e alterna a ordenação. */}
+        <InfoCircleOutlined style={{ color: '#94a3b8' }} onClick={(e) => e.stopPropagation()} />
       </Tooltip>
     </Space>
   );
